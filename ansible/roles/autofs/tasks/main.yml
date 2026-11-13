@@ -1,0 +1,25 @@
+---
+- name: Instalar autofs e cliente NFS
+  ansible.builtin.apt:
+    name: [autofs, nfs-common]
+    state: present
+
+- name: Configurar mapa direto em arquivo separado
+  ansible.builtin.copy:
+    dest: /etc/auto.master.d/asa-proj1.autofs
+    content: "/- /etc/auto.asa-proj1 --timeout=60\n"
+    mode: '0644'
+  notify: Reiniciar autofs
+
+- name: Mapear compartilhamento por demanda
+  ansible.builtin.copy:
+    dest: /etc/auto.asa-proj1
+    content: "/var/nfs -fstype=nfs4,rw,hard,proto=tcp arq.{{ domain }}:/dados/nfs\n"
+    mode: '0644'
+  notify: Reiniciar autofs
+
+- name: Garantir autofs habilitado
+  ansible.builtin.service:
+    name: autofs
+    enabled: true
+    state: started

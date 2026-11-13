@@ -1,0 +1,192 @@
+---
+- name: Descobrir interface privada por MAC
+  ansible.builtin.set_fact:
+    private_interfaces: "{{ ansible_facts.interfaces | map('extract', ansible_facts) | selectattr('macaddress', 'defined') | selectattr('macaddress', 'equalto', private_mac) | map(attribute='device') | list }}"
+
+- name: Conferir interface e endereco do servidor
+  ansible.builtin.assert:
+    that:
+      - private_interfaces | length == 1
+      - ansible_facts[private_interfaces[0]].ipv4.address == dns_ip
+    fail_msg: Interface privada divergente; interromper sem alterar DHCP.
+
+- name: Instalar servidor DNS e DHCP sem inicio automatico
+  ansible.builtin.apt:
+    name: [bind9, bind9-utils, dnsutils, isc-dhcp-server, python3-dnspython]
+    state: present
+    policy_rc_d: 101
+
+- name: Criar diretorio protegido da chave DNS
+  ansible.builtin.file:
+    path: /etc/bind/keys
+    state: directory
+    owner: root
+    group: bind
+    mode: '0750'
+
+- name: Verificar existencia da chave TSIG
+  ansible.builtin.stat:
+    path: /etc/bind/keys/dhcp-ddns.key
+  register: tsig_file
+
+- name: Gerar TSIG apenas na primeira execucao
+  ansible.builtin.command:
+    argv: [tsig-keygen, -a, hmac-sha256, dhcp-ddns]
+  register: tsig_generated
+  when: not tsig_file.stat.exists
+  no_log: true
+
+- name: Gravar chave protegida para BIND
+  ansible.builtin.copy:
+    dest: /etc/bind/keys/dhcp-ddns.key
+    content: "{{ tsig_generated.stdout }}\n"
+    owner: root
+    group: bind
+    mode: '0640'
+    validate: /usr/bin/named-checkconf %s
+  when: not tsig_file.stat.exists
+  no_log: true
+  notify: Reiniciar DNS
+
+- name: Disponibilizar mesma chave ao DHCP sem exportar ao controlador
+  ansible.builtin.copy:
+    src: /etc/bind/keys/dhcp-ddns.key
+    remote_src: true
+    dest: /etc/dhcp/ddns.key
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  notify: Reiniciar DHCP
+
+- name: Configurar opcoes BIND
+  ansible.builtin.template:
+    src: named-options.j2
+    dest: /etc/bind/named.conf.options
+    owner: root
+    group: bind
+    mode: '0644'
+    validate: /usr/bin/named-checkconf %s
+  notify: Reiniciar DNS
+
+- name: Criar diretorio de zonas dinamicas
+  ansible.builtin.file:
+    path: /var/lib/bind
+    state: directory
+    owner: bind
+    group: bind
+    mode: '0755'
+
+# Inicializacao unica: BIND passa a gerir estes arquivos e seus journals.
+# Migracoes dos registros estaticos exigem atualizacao explicita, nao sobrescrita.
+- name: Inicializar zonas sem sobrescrever dados dinamicos existentes
+  ansible.builtin.template:
+    src: "{{ item.template }}"
+    dest: "/var/lib/bind/{{ item.file }}"
+    owner: bind
+    group: bind
+    mode: '0644'
+    force: false
+    validate: "/usr/bin/named-checkzone {{ item.zone }} %s"
+  loop:
+    - { template: zone-forward.j2, file: db.forward, zone: "{{ domain }}" }
+    - { template: zone-reverse.j2, file: db.reverse, zone: "{{ reverse_zone }}" }
+  notify: Reiniciar DNS
+
+- name: Configurar zonas e politicas DDNS restritas
+  ansible.builtin.template:
+    src: named-local.j2
+    dest: /etc/bind/named.conf.local
+    owner: root
+    group: bind
+    mode: '0644'
+    validate: /usr/bin/named-checkconf %s
+  notify: Reiniciar DNS
+
+- name: Validar BIND completo
+  ansible.builtin.command: /usr/bin/named-checkconf
+  changed_when: false
+
+- name: Validar zonas com journals antes de iniciar/reiniciar
+  ansible.builtin.command:
+    argv: [named-checkzone, -j, "{{ item.zone }}", "/var/lib/bind/{{ item.file }}"]
+  loop:
+    - { file: db.forward, zone: "{{ domain }}" }
+    - { file: db.reverse, zone: "{{ reverse_zone }}" }
+  changed_when: false
+
+- name: Restringir DHCP a interface privada descoberta
+  ansible.builtin.copy:
+    dest: /etc/default/isc-dhcp-server
+    content: |
+      INTERFACESv4="{{ private_interfaces[0] }}"
+      INTERFACESv6=""
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reiniciar DHCP
+
+- name: Preparar candidato DHCP em caminho permitido pelo AppArmor
+  ansible.builtin.template:
+    src: dhcpd.conf.j2
+    dest: /etc/dhcp/dhcpd.conf.candidate
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Validar candidato DHCP antes de instalar
+  ansible.builtin.command: /usr/sbin/dhcpd -t -cf /etc/dhcp/dhcpd.conf.candidate
+  changed_when: false
+
+- name: Instalar configuracao DHCP previamente validada
+  ansible.builtin.copy:
+    src: /etc/dhcp/dhcpd.conf.candidate
+    remote_src: true
+    dest: /etc/dhcp/dhcpd.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reiniciar DHCP
+
+- name: Revalidar DHCP completo antes da ativacao
+  ansible.builtin.command: /usr/sbin/dhcpd -t -cf /etc/dhcp/dhcpd.conf
+  changed_when: false
+
+- name: Ativar configuracoes somente apos todas as validacoes
+  ansible.builtin.meta: flush_handlers
+
+- name: Garantir servicos habilitados e ativos
+  ansible.builtin.service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: [named, isc-dhcp-server]
+
+- name: Confirmar DNS local antes de mudar resolvedor
+  ansible.builtin.command:
+    argv: [dig, '@127.0.0.1', +short, "arq.{{ domain }}", A]
+  register: local_dns
+  changed_when: false
+  failed_when: local_dns.rc != 0 or local_dns.stdout | trim != dns_ip
+
+- name: Preservar DNS local nas renovacoes da interface NAT
+  ansible.builtin.blockinfile:
+    path: /etc/dhcp/dhclient.conf
+    marker: "# {mark} ASA PROJ1 DNS"
+    block: |
+      prepend domain-name-servers 127.0.0.1;
+      supersede domain-search "{{ domain }}";
+
+- name: Adicionar resolvedor local sem remover fallback NAT
+  ansible.builtin.lineinfile:
+    path: /etc/resolv.conf
+    regexp: '^nameserver\s+127\.0\.0\.1$'
+    line: nameserver 127.0.0.1
+    insertbefore: BOF
+
+- name: Definir busca do dominio
+  ansible.builtin.lineinfile:
+    path: /etc/resolv.conf
+    regexp: '^search\s'
+    line: "search {{ domain }}"
+    insertbefore: BOF

@@ -1,0 +1,29 @@
+---
+- name: Precondicoes sem criar usuario intruso
+  hosts: lab
+  become: true
+  tasks:
+    - name: Exigir ausencia de conta intruso
+      ansible.builtin.command: getent passwd intruso
+      register: intruso
+      changed_when: false
+      failed_when: intruso.rc != 2
+    - name: Exigir ausencia de home preexistente e chave temporaria
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: [/home/intruso, /tmp/intruso.pub]
+      register: collision
+      failed_when: collision.stat.exists
+    - name: Preservar dados NFS antes do verificador
+      when: inventory_hostname == 'arq'
+      block:
+        - ansible.builtin.file:
+            path: /root/asa-verificador-backup
+            state: directory
+            mode: '0700'
+        - ansible.builtin.copy:
+            src: "/dados/nfs/{{ item }}.txt"
+            dest: "/root/asa-verificador-backup/{{ item }}.{{ ansible_facts.date_time.epoch }}.txt"
+            remote_src: true
+            mode: '0600'
+          loop: "{{ academic_users }}"

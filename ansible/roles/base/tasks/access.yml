@@ -1,0 +1,30 @@
+---
+- name: Verificar chave e elevacao em nova conexao SSH
+  ansible.builtin.command:
+    argv:
+      - ssh
+      - -T
+      - -i
+      - "{{ controller_state }}/keys/{{ item }}"
+      - -o
+      - IdentitiesOnly=yes
+      - -o
+      - BatchMode=yes
+      - -o
+      - ControlMaster=no
+      - -o
+      - ControlPath=none
+      - -o
+      - StrictHostKeyChecking=yes
+      - -o
+      - "UserKnownHostsFile={{ controller_state }}/known_hosts"
+      - -o
+      - ConnectTimeout=15
+      - "{{ item }}@{{ ansible_host }}"
+      - sudo -n id -u
+  loop: "{{ academic_users + ['vagrant'] }}"
+  register: access_probe
+  failed_when: access_probe.rc != 0 or access_probe.stdout | trim != '0'
+  changed_when: false
+  delegate_to: localhost
+  become: false

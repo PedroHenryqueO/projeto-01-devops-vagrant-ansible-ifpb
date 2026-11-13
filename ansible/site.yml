@@ -1,0 +1,11 @@
+---
+- name: Configuracao do servidor de arquivos e rede
+  hosts: fileservers
+  become: true
+  roles:
+    - role: base
+      tags: [base]
+    - role: network_server
+      tags: [dhcp, dns]
+    - role: storage_nfs
+      tags: [storage, nfs]

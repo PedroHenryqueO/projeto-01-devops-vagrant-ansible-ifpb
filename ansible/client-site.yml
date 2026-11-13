@@ -1,0 +1,49 @@
+---
+- name: Configurar convidados clientes
+  hosts: clients
+  become: true
+  pre_tasks:
+    - name: Preservar DNS interno em renovacoes de qualquer interface
+      ansible.builtin.blockinfile:
+        path: /etc/dhcp/dhclient.conf
+        marker: "# {mark} ASA CLIENT DNS"
+        block: |
+          prepend domain-name-servers 192.168.56.120;
+          supersede domain-search "{{ domain }}";
+  roles:
+    - base
+    - autofs
+  tasks:
+    - name: Instalar MariaDB
+      ansible.builtin.apt:
+        name: mariadb-server
+        state: present
+      when: inventory_hostname == 'db'
+    - name: Habilitar MariaDB
+      ansible.builtin.service:
+        name: mariadb
+        enabled: true
+        state: started
+      when: inventory_hostname == 'db'
+    - name: Instalar Apache
+      ansible.builtin.apt:
+        name: apache2
+        state: present
+      when: inventory_hostname == 'app'
+    - name: Publicar pagina academica
+      ansible.builtin.copy:
+        src: files/index.html
+        dest: /var/www/html/index.html
+        mode: '0644'
+      when: inventory_hostname == 'app'
+    - name: Habilitar Apache
+      ansible.builtin.service:
+        name: apache2
+        enabled: true
+        state: started
+      when: inventory_hostname == 'app'
+    - name: Instalar ferramentas graficas
+      ansible.builtin.apt:
+        name: [firefox-esr, xauth, x11-utils]
+        state: present
+      when: inventory_hostname == 'cli'

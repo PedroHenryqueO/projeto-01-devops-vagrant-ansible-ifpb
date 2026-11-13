@@ -1,0 +1,32 @@
+---
+- name: Complementar teste de grupo sem alterar o original
+  hosts: lab
+  become: true
+  tasks:
+    - name: Exigir conta ausente antes do teste complementar
+      ansible.builtin.command: getent passwd intruso
+      register: account
+      changed_when: false
+      failed_when: account.rc != 2
+    - name: Criar conta temporaria e testar restricao
+      block:
+        - ansible.builtin.user:
+            name: intruso
+            shell: /bin/bash
+            create_home: true
+        - ansible.posix.authorized_key:
+            user: intruso
+            key: "{{ lookup('ansible.builtin.file', controller_state + '/keys/intruso.pub') }}"
+        - name: Testar chave valida de usuario fora dos grupos permitidos
+          ansible.builtin.command:
+            argv: [ssh, -i, "{{ controller_state }}/keys/intruso", -o, BatchMode=yes, -o, IdentitiesOnly=yes, -o, "UserKnownHostsFile={{ controller_state }}/known_hosts", "intruso@{{ ansible_host }}", id]
+          delegate_to: localhost
+          become: false
+          register: denied
+          changed_when: false
+          failed_when: denied.rc == 0 or 'Permission denied' not in denied.stderr
+      always:
+        - ansible.builtin.user:
+            name: intruso
+            state: absent
+            remove: true

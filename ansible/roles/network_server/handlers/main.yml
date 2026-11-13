@@ -1,0 +1,9 @@
+---
+- name: Reiniciar DNS
+  ansible.builtin.service:
+    name: named
+    state: restarted
+- name: Reiniciar DHCP
+  ansible.builtin.service:
+    name: isc-dhcp-server
+    state: restarted

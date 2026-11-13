@@ -1,0 +1,31 @@
+authoritative;
+default-lease-time 180;
+max-lease-time 3600;
+option domain-name "{{ domain }}";
+option domain-name-servers {{ dns_ip }};
+ddns-update-style interim;
+ddns-updates off;
+ignore client-updates;
+update-static-leases off;
+ddns-domainname "{{ domain }}.";
+ddns-rev-domainname "in-addr.arpa.";
+include "/etc/dhcp/ddns.key";
+zone {{ domain }}. { primary 127.0.0.1; key dhcp-ddns; }
+zone {{ reverse_zone }}. { primary 127.0.0.1; key dhcp-ddns; }
+subnet {{ private_network }} netmask {{ private_netmask }} {
+    range 192.168.56.{{ dhcp_first }} 192.168.56.{{ dhcp_last }};
+    option routers 192.168.56.1;
+}
+{% for record in server_records if record.mac is defined %}
+host {{ record.name }} {
+    hardware ethernet {{ record.mac }};
+    fixed-address {{ record.ip }};
+}
+{% endfor %}
+# Identificacao por MAC, SEM fixed-address: cli continua com concessao dinamica.
+host cli {
+    hardware ethernet {{ cli_mac }};
+    option host-name "cli";
+    ddns-hostname "cli";
+    ddns-updates on;
+}

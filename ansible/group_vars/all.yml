@@ -1,0 +1,20 @@
+---
+domain: pedro.henryque.devops
+academic_users: [pedro, henryque]
+controller_state: "{{ lookup('ansible.builtin.env', 'ASA_PROJ1_STATE_DIR') | default(lookup('ansible.builtin.env', 'HOME') + '/.local/share/asa-proj1', true) }}"
+ansible_ssh_private_key_file: "{{ controller_state }}/keys/vagrant"
+ansible_ssh_common_args: "-o UserKnownHostsFile={{ controller_state }}/known_hosts -o StrictHostKeyChecking=yes"
+private_network: 192.168.56.0
+private_netmask: 255.255.255.0
+private_cidr: 192.168.56.0/24
+dns_ip: 192.168.56.120
+private_mac: "02:20:26:00:00:20"
+dns_serial: 2026111201
+reverse_zone: 56.168.192.in-addr.arpa
+dhcp_first: 50
+dhcp_last: 100
+server_records:
+  - { name: arq, ip: 192.168.56.120, octet: 120 }
+  - { name: db, ip: 192.168.56.121, octet: 121, mac: "02:20:26:00:00:21" }
+  - { name: app, ip: 192.168.56.122, octet: 122, mac: "02:20:26:00:00:22" }
+cli_mac: "02:20:26:00:00:23"

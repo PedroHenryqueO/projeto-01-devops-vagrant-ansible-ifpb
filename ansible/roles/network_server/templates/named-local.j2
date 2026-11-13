@@ -1,0 +1,17 @@
+include "/etc/bind/keys/dhcp-ddns.key";
+zone "{{ domain }}" {
+    type primary;
+    file "/var/lib/bind/db.forward";
+    update-policy {
+        grant dhcp-ddns name cli.{{ domain }}. A TXT DHCID;
+    };
+};
+zone "{{ reverse_zone }}" {
+    type primary;
+    file "/var/lib/bind/db.reverse";
+    update-policy {
+{% for octet in range(dhcp_first, dhcp_last + 1) %}
+        grant dhcp-ddns name {{ octet }}.{{ reverse_zone }}. PTR;
+{% endfor %}
+    };
+};

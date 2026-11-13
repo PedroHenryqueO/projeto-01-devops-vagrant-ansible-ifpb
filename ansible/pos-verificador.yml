@@ -1,0 +1,32 @@
+---
+- name: Limpar exclusivamente artefatos do teste autorizado
+  hosts: lab
+  become: true
+  tasks:
+    - name: Remover conta temporaria criada pelo teste
+      ansible.builtin.user:
+        name: intruso
+        state: absent
+        remove: true
+    - name: Remover chave publica temporaria
+      ansible.builtin.file:
+        path: /tmp/intruso.pub
+        state: absent
+    - name: Restaurar conteudo NFS preservado
+      when: inventory_hostname == 'arq'
+      block:
+        - name: Encontrar backups
+          ansible.builtin.find:
+            paths: /root/asa-verificador-backup
+            patterns: "{{ item }}.*.txt"
+          loop: "{{ academic_users }}"
+          register: backups
+        - name: Restaurar o ultimo backup de cada usuario
+          ansible.builtin.copy:
+            src: "{{ (item.files | sort(attribute='mtime') | last).path }}"
+            dest: "/dados/nfs/{{ item.item }}.txt"
+            remote_src: true
+            owner: nfs-ifpb
+            group: nfs-ifpb
+            mode: '0644'
+          loop: "{{ backups.results }}"

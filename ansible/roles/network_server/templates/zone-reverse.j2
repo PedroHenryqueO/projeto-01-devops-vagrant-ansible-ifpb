@@ -1,0 +1,7 @@
+$TTL 60
+@ IN SOA arq.{{ domain }}. hostmaster.{{ domain }}. (
+    {{ dns_serial }} 3600 600 86400 60 )
+@ IN NS arq.{{ domain }}.
+{% for record in server_records %}
+{{ record.octet }} IN PTR {{ record.name }}.{{ domain }}.
+{% endfor %}

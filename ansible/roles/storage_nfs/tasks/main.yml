@@ -1,0 +1,148 @@
+---
+- name: Instalar ferramentas sem iniciar NFS antecipadamente
+  ansible.builtin.apt:
+    name: [lvm2, e2fsprogs, nfs-kernel-server]
+    state: present
+    policy_rc_d: 101
+
+- name: Instalar validador somente de leitura
+  ansible.builtin.copy:
+    src: validate_disks.py
+    dest: /usr/local/sbin/asa-validate-disks
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Revalidar identidades e dados antes de escrever nos discos
+  ansible.builtin.command:
+    argv: [python3, /usr/local/sbin/asa-validate-disks, "{{ storage_disks | map(attribute='serial') | list | to_json }}"]
+  register: disk_guard
+  changed_when: false
+
+- name: Registrar dispositivos autorizados descobertos
+  ansible.builtin.set_fact:
+    storage_devices: "{{ (disk_guard.stdout | from_json).devices }}"
+
+- name: Criar PVs e VG sem remover PVs nem forcar
+  community.general.lvg:
+    vg: dados
+    pvs: "{{ storage_devices }}"
+    state: present
+    remove_extra_pvs: false
+
+- name: Criar LV de 15 GiB sem redimensionamento destrutivo
+  community.general.lvol:
+    vg: dados
+    lv: ifpb
+    size: 15g
+    shrink: false
+    force: false
+    state: present
+
+- name: Criar ext4 somente se ainda nao existir
+  community.general.filesystem:
+    fstype: ext4
+    dev: /dev/dados/ifpb
+    force: false
+
+- name: Montar dados persistentemente por UUID
+  ansible.builtin.command: blkid -s UUID -o value /dev/dados/ifpb
+  register: dados_uuid
+  changed_when: false
+
+- name: Garantir montagem e fstab
+  ansible.posix.mount:
+    path: /dados
+    src: "UUID={{ dados_uuid.stdout | trim }}"
+    fstype: ext4
+    opts: defaults
+    dump: '0'
+    passno: '2'
+    state: mounted
+
+- name: Confirmar montagem antes de criar export
+  ansible.builtin.command: findmnt -n -o SOURCE,FSTYPE --mountpoint /dados
+  register: dados_mount
+  changed_when: false
+  failed_when: "'/dev/mapper/dados-ifpb' not in dados_mount.stdout or 'ext4' not in dados_mount.stdout"
+
+- name: Conferir UID reservado
+  ansible.builtin.command: "getent passwd {{ nfs_uid }}"
+  register: uid_probe
+  changed_when: false
+  failed_when: uid_probe.rc not in [0,2] or (uid_probe.rc == 0 and not uid_probe.stdout.startswith('nfs-ifpb:'))
+
+- name: Conferir GID reservado
+  ansible.builtin.command: "getent group {{ nfs_gid }}"
+  register: gid_probe
+  changed_when: false
+  failed_when: gid_probe.rc not in [0,2] or (gid_probe.rc == 0 and not gid_probe.stdout.startswith('nfs-ifpb:'))
+
+- name: Criar grupo do mapeamento NFS
+  ansible.builtin.group:
+    name: nfs-ifpb
+    gid: "{{ nfs_gid }}"
+
+- name: Criar usuario NFS sem shell nem home
+  ansible.builtin.user:
+    name: nfs-ifpb
+    uid: "{{ nfs_uid }}"
+    group: nfs-ifpb
+    shell: /usr/sbin/nologin
+    create_home: false
+    home: /nonexistent
+    password_lock: true
+
+- name: Criar diretorio com escrita apenas pelo dono
+  ansible.builtin.file:
+    path: /dados/nfs
+    state: directory
+    owner: nfs-ifpb
+    group: nfs-ifpb
+    mode: '0755'
+
+- name: Criar diretorio de dependencia systemd
+  ansible.builtin.file:
+    path: /etc/systemd/system/nfs-server.service.d
+    state: directory
+    mode: '0755'
+
+- name: Vincular NFS a montagem correta
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/nfs-server.service.d/dados.conf
+    content: |
+      [Unit]
+      RequiresMountsFor=/dados
+      BindsTo=dados.mount
+      After=dados.mount
+      [Service]
+      ExecStartPre=/usr/bin/mountpoint -q /dados
+    mode: '0644'
+  notify: Reiniciar NFS
+
+- name: Criar diretorio de exports complementares
+  ansible.builtin.file:
+    path: /etc/exports.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configurar exportacao sem alterar exports alheios
+  ansible.builtin.copy:
+    dest: /etc/exports.d/asa-proj1.exports
+    content: "/dados/nfs {{ private_cidr }}(rw,sync,all_squash,anonuid={{ nfs_uid }},anongid={{ nfs_gid }},no_subtree_check)\n"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reiniciar NFS
+
+- name: Aplicar dependencia e exportacao
+  ansible.builtin.meta: flush_handlers
+
+- name: Garantir NFS ativo e habilitado
+  ansible.builtin.systemd_service:
+    name: nfs-server
+    daemon_reload: true
+    state: started
+    enabled: true

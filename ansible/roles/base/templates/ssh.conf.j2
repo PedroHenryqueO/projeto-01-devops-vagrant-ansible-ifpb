@@ -1,0 +1,9 @@
+# Gerenciado pelo Ansible. Validar com sshd -t antes de reload.
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+AllowGroups vagrant ifpb
+Banner /etc/issue.net
+X11Forwarding {{ 'yes' if inventory_hostname == 'cli' else 'no' }}

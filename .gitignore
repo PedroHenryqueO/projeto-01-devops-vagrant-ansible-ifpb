@@ -1,0 +1,44 @@
+# Estado e discos locais
+.vagrant/
+.vagrant-proj1/
+.validacao-vagrant/
+*.vdi
+*.vmdk
+*.vhd
+*.vhdx
+*.sav
+*.ova
+*.box
+# Segredos: apenas chaves publicas podem ser versionadas explicitamente
+keys/
+.ssh/
+.aws/
+.env
+.env.*
+secrets/
+credentials/
+private_key*
+id_rsa*
+id_ed25519*
+*.pem
+*.key
+*.p12
+*.pfx
+*.retry
+__pycache__/
+*.pyc
+# Evidencias locais contem caminhos e inventario do hospedeiro
+docs/evidencias/
+# Estado de identidade gerado por instancia
+/ansible/host_vars/arq.yml
+/Vagrantfile.proposto
+/Vagrantfile.teste-debian
+# Registros internos e auxiliares substituidos pelo fluxo definitivo
+/PROGRESSO.md
+/ansible/clients.yml
+/scripts/verificador-isolado.sh
+/referencias/*
+!/referencias/README.md
+# Historico local; somente a matriz e documentacao final sao distribuidos
+/docs/*
+!/docs/MATRIZ-REQUISITOS.md
