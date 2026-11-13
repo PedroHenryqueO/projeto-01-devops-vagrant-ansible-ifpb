@@ -2,7 +2,7 @@
 
 **IFPB — Campus João Pessoa · Tecnologia em Redes de Computadores**
 Administração de Sistemas Abertos · Professor Leonidas Lima · 2026.2
-Pedro Henryque de Oliveira · Matrícula **20251380020** · Projeto individual autorizado.
+Pedro Henryque de Oliveira · Matrícula **20251380020** · Projeto individual.
 
 Infraestrutura como código com quatro Debian 12 Bookworm, VirtualBox, Vagrant
 e Ansible pelo Ubuntu WSL2. Usuários pedro e henryque representam o mesmo aluno.
