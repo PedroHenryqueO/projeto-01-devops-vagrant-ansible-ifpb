@@ -1,7 +1,6 @@
 # -*- mode: ruby -*-
-# Infraestrutura definitiva preparada. Operar via scripts/projeto.cmd.
-# A configuracao anterior do teste foi preservada localmente em Vagrantfile.teste-debian.
-# Servicos configurados por Ansible.
+# Cria as VMs; o Ansible configura os serviços.
+# Use scripts/projeto.cmd para iniciar as máquinas.
 require "open3"
 
 Vagrant.configure("2") do |config|
@@ -11,7 +10,7 @@ Vagrant.configure("2") do |config|
   vboxmanage = ENV.fetch("VBOXMANAGE", "VBoxManage")
 
 
-  # NAT fica no adaptador 1. Os MACs abaixo identificam a interface privada.
+  # Mantém a internet pela NAT e identifica a rede privada pelos MACs.
   machines = {
     "arq" => { ram: 512,  port: 2220, mac: "022026000020", ip: "192.168.56.120" },
     "db"  => { ram: 512,  port: 2221, mac: "022026000021" },
@@ -19,7 +18,7 @@ Vagrant.configure("2") do |config|
     "cli" => { ram: 1024, cpus: 2, port: 2224, mac: "022026000023" }
   }
 
-  # Os subprocessos só são chamados pelos gatilhos, nunca ao carregar/validar.
+  # Executa o VBoxManage apenas quando o gatilho é chamado.
   query = lambda do |*args|
     output, status = Open3.capture2e(vboxmanage, *args)
     raise "VBoxManage falhou (#{args.first}): #{output}" unless status.success?
@@ -42,7 +41,7 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.box = "debian/bookworm64"
-  # Versao efetivamente instalada; pode ser parametrizada para uma revisao aprovada.
+  # Usa a versão da box validada neste projeto.
   config.vm.box_version = ENV.fetch("ASA_PROJ1_BOX_VERSION", "12.20250126.1")
   config.vm.box_check_update = false
   config.ssh.insert_key = false
@@ -52,7 +51,7 @@ Vagrant.configure("2") do |config|
   end
 
   machines.each do |name, spec|
-    # Um 'up' sem nome seleciona apenas arq. Os dependentes exigem nome explicito.
+    # Inicia arq primeiro; os clientes devem ser iniciados separadamente.
     config.vm.define name, autostart: name == "arq" do |vm|
       vm.vm.hostname = "#{name}.#{domain}"
       vm.vm.network "forwarded_port", guest: 22, host: spec[:port],
@@ -65,9 +64,7 @@ Vagrant.configure("2") do |config|
           vm.vm.disk :disk, size: "10GB", name: "ASA-Proj1-arq-dados-#{index + 1}"
         end
       else
-        # O convidado sera configurado por Ansible, via NAT, para usar DHCP.
-        # Nao ha IP estatico de cli. A configuracao antecipada pelo Vagrant
-        # criaria uma dependencia de DHCP antes do bootstrap administrativo.
+        # O bootstrap ativa o DHCP privado sem depender dele para o primeiro SSH.
         vm.vm.network "private_network", name: hostonly, type: "dhcp",
                       mac: spec[:mac], auto_config: false,
                       dhcp_ip: "192.168.56.2", dhcp_lower: "192.168.56.3",
@@ -84,7 +81,7 @@ Vagrant.configure("2") do |config|
         vb.check_guest_additions = false
       end
 
-      # Gatilho de acao por VM, antes do fluxo do provider (tipo padrao do Vagrant).
+      # Confere a rede e desabilita somente o DHCP do VirtualBox deste projeto.
       vm.trigger.before [:up, :reload, :resume], type: :action do |trigger|
         trigger.name = "Aprovacao e DHCP exclusivo do Projeto 01"
         trigger.on_error = :halt

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executar no WSL depois de criar arq; gera manifesto LOCAL, sem formatar."""
+"""Identifica os discos de arq pelo WSL, sem formatar ou alterar seu conteúdo."""
 import json, pathlib, re, shutil, subprocess, argparse
 p=argparse.ArgumentParser(); p.add_argument('--vboxmanage',default=shutil.which('VBoxManage.exe') or '/mnt/c/Program Files/Oracle/VirtualBox/VBoxManage.exe'); a=p.parse_args()
 root=pathlib.Path(__file__).resolve().parent.parent
@@ -18,7 +18,7 @@ for uid in ids:
     tail=uid.replace('-','')[-8:]
     serial='VB'+uid[:8]+'-'+''.join(reversed([tail[i:i+2] for i in range(0,8,2)]))
     disks.append({'serial':serial,'media_uuid':uid})
-# JSON e YAML valido; manifesto deliberadamente nao distribuido.
+# Salva os dados em JSON, que também é um formato YAML válido.
 dest=root/'ansible/host_vars/arq.yml'
 dest.parent.mkdir(exist_ok=True)
 dest.write_text(json.dumps({'storage_disks':disks,'nfs_uid':2048,'nfs_gid':2048},indent=2)+'\n')

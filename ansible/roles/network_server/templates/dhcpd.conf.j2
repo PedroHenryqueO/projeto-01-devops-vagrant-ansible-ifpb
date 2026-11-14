@@ -22,7 +22,7 @@ host {{ record.name }} {
     fixed-address {{ record.ip }};
 }
 {% endfor %}
-# Identificacao por MAC, SEM fixed-address: cli continua com concessao dinamica.
+# Identifica cli pelo MAC, mantendo o IP dinâmico e a atualização do DNS.
 host cli {
     hardware ethernet {{ cli_mac }};
     option host-name "cli";

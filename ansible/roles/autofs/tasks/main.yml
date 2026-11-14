@@ -1,4 +1,5 @@
 ---
+# Monta o compartilhamento NFS quando /var/nfs é acessado.
 - name: Instalar autofs e cliente NFS
   ansible.builtin.apt:
     name: [autofs, nfs-common]

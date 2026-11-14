@@ -1,4 +1,5 @@
 ---
+# Define os usuários, endereços e MACs usados pelos playbooks.
 domain: pedro.henryque.devops
 academic_users: [pedro, henryque]
 controller_state: "{{ lookup('ansible.builtin.env', 'ASA_PROJ1_STATE_DIR') | default(lookup('ansible.builtin.env', 'HOME') + '/.local/share/asa-proj1', true) }}"

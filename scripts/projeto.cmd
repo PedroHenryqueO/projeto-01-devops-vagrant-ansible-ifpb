@@ -1,6 +1,6 @@
 @echo off
 setlocal
-rem CMD evita mudar a politica Restricted de scripts PowerShell do hospedeiro.
+rem Executa o Vagrant sem mudar a politica de scripts do Windows.
 pushd "%~dp0.." || exit /b 1
 set "VAGRANT_VAGRANTFILE=Vagrantfile"
 set "VAGRANT_DOTFILE_PATH=%CD%\.vagrant"
@@ -36,7 +36,7 @@ goto capture
 if not "%~2"=="--aprovar-vm" goto denied
 if not "%~3"=="--aprovar-dhcp" goto denied
 if not "%~4"=="" goto denied
-rem Flags operacionais nao substituem a aprovacao humana da Etapa 4.4-B.
+rem As opcoes confirmam a operacao; confira o uso da rede antes de continuar.
 set "ASA_PROJ1_EXECUTION_APPROVED=1"
 set "ASA_PROJ1_DHCP_CHANGE_APPROVED=1"
 vagrant up arq --provider=virtualbox --no-provision

@@ -9,7 +9,7 @@
 *.sav
 *.ova
 *.box
-# Segredos: apenas chaves publicas podem ser versionadas explicitamente
+# Chaves privadas e credenciais ficam fora do Git
 keys/
 .ssh/
 .aws/
@@ -27,18 +27,25 @@ id_ed25519*
 *.retry
 __pycache__/
 *.pyc
-# Evidencias locais contem caminhos e inventario do hospedeiro
+# Mantém os registros de execução apenas neste computador
 docs/evidencias/
-# Estado de identidade gerado por instancia
+# Arquivos gerados para as VMs deste ambiente
 /ansible/host_vars/arq.yml
 /Vagrantfile.proposto
 /Vagrantfile.teste-debian
-# Registros internos e auxiliares substituidos pelo fluxo definitivo
+# Registros e auxiliares mantidos apenas localmente
 /PROGRESSO.md
 /ansible/clients.yml
 /scripts/verificador-isolado.sh
 /referencias/*
-!/referencias/README.md
-# Historico local; somente a matriz e documentacao final sao distribuidos
 /docs/*
-!/docs/MATRIZ-REQUISITOS.md
+/scripts/ansible.sh
+/scripts/configurar-cliente.sh
+/scripts/verificar-cliente.sh
+/scripts/testar-gatilho.rb
+/scripts/validar-reboots.sh
+/ansible/testar-intruso.yml
+/ansible/verify.yml
+/ansible/verify-storage.yml
+/ansible/verify-clients.yml
+/ansible/verify-integration.yml

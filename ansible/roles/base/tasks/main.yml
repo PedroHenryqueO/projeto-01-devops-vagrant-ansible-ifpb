@@ -73,7 +73,7 @@
     mode: '0440'
     validate: /usr/sbin/visudo -cf %s
 
-# Conexoes novas, sem reaproveitar sockets persistentes: antes e depois do hardening.
+# Testa as chaves em novas conexões antes e depois de restringir o SSH.
 - name: Provar autenticacao e sudo antes de restringir SSH
   ansible.builtin.include_tasks: access.yml
 

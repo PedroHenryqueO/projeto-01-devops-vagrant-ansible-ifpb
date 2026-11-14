@@ -1,4 +1,5 @@
 ---
+# Confere os discos antes de criar o LVM e montar o compartilhamento NFS.
 - name: Instalar ferramentas sem iniciar NFS antecipadamente
   ansible.builtin.apt:
     name: [lvm2, e2fsprogs, nfs-kernel-server]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executa o ORIGINAL sem alteracoes; falha antes se DNS/chaves/display faltarem."""
+"""Confere os pré-requisitos e executa o verificador original sem modificá-lo."""
 import os, pathlib, socket, subprocess, tempfile, shutil, sys, json
 root=pathlib.Path(__file__).resolve().parent.parent
 state=pathlib.Path(os.environ.get('ASA_PROJ1_STATE_DIR',pathlib.Path.home()/'.local/share/asa-proj1'))
@@ -14,7 +14,7 @@ if not os.environ.get('DISPLAY'): raise SystemExit('DISPLAY ausente; usar WSLg')
 if not (root/'referencias/verifica-proj1.py').is_file(): raise SystemExit('Obter original com o professor')
 os.environ['ANSIBLE_CONFIG']=str(root/'ansible.cfg')
 subprocess.run(['ansible-playbook',str(root/'ansible/pre-verificador.yml')],cwd=root,check=True)
-# SSH nao interativo, sem agente ou chaves padrao que invalidem o teste sem -i.
+# Evita prompts e chaves extras que poderiam alterar os testes de autenticação.
 with tempfile.TemporaryDirectory(prefix='asa-verificador-') as folder:
     folder=pathlib.Path(folder); config=folder/'ssh.conf'
     known=(state/'known_hosts').read_text()

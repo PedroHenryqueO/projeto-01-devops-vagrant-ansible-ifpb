@@ -1,4 +1,5 @@
 ---
+# Evita conflitos com a conta de teste e preserva os arquivos NFS.
 - name: Precondicoes sem criar usuario intruso
   hosts: lab
   become: true

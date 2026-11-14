@@ -77,8 +77,8 @@
     group: bind
     mode: '0755'
 
-# Inicializacao unica: BIND passa a gerir estes arquivos e seus journals.
-# Migracoes dos registros estaticos exigem atualizacao explicita, nao sobrescrita.
+# Cria as zonas apenas uma vez para preservar as atualizações do DDNS.
+# Altere registros estáticos sem sobrescrever as zonas já existentes.
 - name: Inicializar zonas sem sobrescrever dados dinamicos existentes
   ansible.builtin.template:
     src: "{{ item.template }}"

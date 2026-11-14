@@ -9,7 +9,7 @@ done
 [ -n "$iface" ] && [ "$iface" != eth0 ]
 hostname "$fqdn"
 cat > /etc/dhcp/dhclient-enter-hooks.d/asa-private-route <<EOF
-# Preservar o default NAT mesmo anunciando gateway privado conforme enunciado.
+# Mantém a rota padrão pela NAT mesmo recebendo o gateway da rede privada.
 if [ "\$interface" = "$iface" ]; then
   unset new_routers
 fi

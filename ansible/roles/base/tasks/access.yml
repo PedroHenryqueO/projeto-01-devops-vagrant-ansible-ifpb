@@ -1,4 +1,5 @@
 ---
+# Confirma as chaves e o sudo sem reutilizar uma conexão SSH existente.
 - name: Verificar chave e elevacao em nova conexao SSH
   ansible.builtin.command:
     argv:

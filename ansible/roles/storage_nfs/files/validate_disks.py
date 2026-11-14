@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Somente leitura. Aceita discos vazios ou exclusivamente o LVM deste projeto."""
+"""Verifica os discos sem alterá-los; aceita discos vazios ou o LVM do projeto."""
 import json, os, subprocess, sys
 def run(*args):
     return subprocess.check_output(args,text=True).strip()

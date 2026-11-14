@@ -1,58 +1,94 @@
 # Projeto 01 — DevOps com Vagrant e Ansible
 
-**IFPB — Campus João Pessoa · Tecnologia em Redes de Computadores**
-Administração de Sistemas Abertos · Professor Leonidas Lima · 2026.2
-Pedro Henryque de Oliveira · Matrícula **20251380020** · Projeto individual.
+## 1. Identificação
 
-Infraestrutura como código com quatro Debian 12 Bookworm, VirtualBox, Vagrant
-e Ansible pelo Ubuntu WSL2. Usuários pedro e henryque representam o mesmo aluno.
+- **Instituição:** IFPB — Campus João Pessoa
+- **Curso:** Tecnologia em Redes de Computadores
+- **Disciplina:** Administração de Sistemas Abertos
+- **Professor:** Leonidas Lima
+- **Período:** 2026.2
+- **Aluno:** Pedro Henryque de Oliveira
+- **Matrícula:** 20251380020
 
-| VM | RAM | CPUs | Rede privada | Serviços |
+Projeto individual. Os usuários adotados são `pedro` e `henryque`.
+
+## 2. Objetivo
+
+Criar quatro máquinas Debian com Vagrant e automatizar serviços Linux com Ansible: DHCP, DNS, LVM, NFS, MariaDB, Apache e acesso remoto por SSH.
+
+## 3. Infraestrutura
+
+| Máquina | RAM | CPUs | Endereço privado | Função |
 |---|---:|---:|---|---|
-| arq | 512 MB | 1 | 192.168.56.120 estático | DHCP, BIND/DDNS, LVM e NFS |
-| db | 512 MB | 1 | .121, reserva MAC 02:20:26:00:00:21 | MariaDB, autofs |
-| app | 512 MB | 1 | .122, reserva MAC 02:20:26:00:00:22 | Apache/página acadêmica, autofs |
-| cli | 1024 MB | 2 | .50–.100 dinâmico, MAC 02:20:26:00:00:23 | Firefox ESR, xauth/X11, autofs |
+| arq | 512 MB | 1 | 192.168.56.120 | Rede e armazenamento |
+| db | 512 MB | 1 | 192.168.56.121, reserva DHCP | Banco de dados |
+| app | 512 MB | 1 | 192.168.56.122, reserva DHCP | Servidor web |
+| cli | 1024 MB | 2 | DHCP, faixa .50–.100 | Cliente com Firefox |
 
-Domínio: `pedro.henryque.devops`. NIC1 NAT mantém internet e administração;
-NIC2 host-only mantém a rede acadêmica. Portas SSH Windows: 2220/2221/2223/2224,
-vinculadas apenas a 127.0.0.1. arq tem três discos extras de 10 GiB, VG dados,
-LV ifpb de 15 GiB, ext4 em /dados. NFS /dados/nfs usa sync e all_squash para
-nfs-ifpb 2048:2048, sem shell. Autofs monta /var/nfs por demanda.
+Domínio: `pedro.henryque.devops`.
 
-## Pré-requisitos
+Cada VM tem uma interface NAT para internet e outra host-only para a rede do projeto. As portas SSH no Windows são 2220, 2221, 2223 e 2224, respectivamente, acessíveis por `127.0.0.1`.
 
-Windows com virtualização, VirtualBox e Vagrant; Ubuntu WSL2 com Python, OpenSSH,
-Ansible Core 2.20 e WSLg/xauth para demonstração gráfica. Testado neste ambiente
-com VirtualBox 7.2.20, Vagrant 2.4.9 e Python controlador 3.14. Chaves públicas
-e segredos não precisam existir no clone; serão gerados/preparados localmente.
-As versões das collections estão em ansible/requirements.yml.
+arq tem três discos adicionais de 10 GiB. As máquinas usam linked clones da box `debian/bookworm64`.
 
-## Instalação e rede
+## 4. Ferramentas utilizadas
 
-Clone o repositório e abra PowerShell nessa pasta; no WSL, acesse a mesma pasta.
-Instale dependências do controlador conforme sua distribuição e execute:
+- Windows com VirtualBox e Vagrant.
+- Ubuntu WSL2 com Python, OpenSSH e Ansible.
+- WSLg e xauth para executar Firefox remotamente.
+- Collections `ansible.posix` e `community.general`.
+
+O ambiente foi validado com VirtualBox 7.2.20, Vagrant 2.4.9 e Ansible Core 2.20.1.
+
+No Ubuntu WSL, prepare o controlador:
 
 ```bash
-ansible-galaxy collection install -r ansible/requirements.yml
+sudo apt update
+sudo apt install python3-venv openssh-client dnsutils xauth
+python3 -m venv ~/.venvs/asa-proj1
+source ~/.venvs/asa-proj1/bin/activate
+python3 -m pip install ansible-core==2.20.1
 ```
 
-No Ubuntu, os pacotes do controlador incluem `python3`, `python3-venv`,
-`openssh-client`, `dnsutils`, `xauth` e Ansible Core 2.20. Se o pacote Ansible
-da distribuição for diferente, instalar a versão compatível em virtualenv
-(`python3 -m venv ~/.venvs/asa-proj1`, ativar e instalar `ansible-core==2.20.1`).
+Ative esse ambiente virtual nas sessões usadas para executar o Ansible.
 
-Antes de qualquer VM, examine `VBoxManage list hostonlyifs`, `list dhcpservers`
-e `list vms`. A rede deve estar em 192.168.56.1/24, sem conflitos. A proposta
-exige um cadastro DHCP VirtualBox em .2, faixa .3–.254, que o gatilho desabilita
-sem remover. **Não alterar adaptadores compartilhados sem avaliar impacto.**
-Em ambiente novo, criar/configurar esse adaptador e cadastro exige autorização
-do administrador; a automação interrompe se houver divergência, não corrige
-recursos globais silenciosamente. ASA_PROJ1_HOSTONLY_NAME parametriza seu nome.
+## 5. Serviços configurados
 
-Somente num computador novo e após aprovar uma rede sem conflitos, os comandos
-abaixo preparam o adaptador. Substituir ADAPTADOR pelo nome retornado; se já
-existir rede/DHCP compartilhado, inspecionar e obter aprovação específica.
+**Todas as máquinas:** atualização do sistema, Chrony com `pool.ntp.br`, timezone `America/Recife`, grupo `ifpb`, usuários e chaves individuais, sudo e cliente NFS.
+
+O SSH permite autenticação por chave, bloqueia root e restringe o acesso aos grupos `vagrant` e `ifpb`. A mensagem exigida pelo enunciado é preservada.
+
+**arq:** DHCP autoritativo na interface privada, reservas de db/app, DNS direto e reverso, encaminhadores `1.1.1.1` e `8.8.8.8` e DDNS de cli autenticado por TSIG. O armazenamento usa VG `dados`, LV `ifpb` de 15 GiB, ext4 em `/dados` e NFS em `/dados/nfs`, com `sync` e `all_squash` para `nfs-ifpb`.
+
+**db:** MariaDB e autofs em `/var/nfs`.
+
+**app:** Apache, página acadêmica e autofs em `/var/nfs`.
+
+**cli:** Firefox ESR, xauth, encaminhamento X11 e autofs em `/var/nfs`.
+
+## 6. Como executar o projeto
+
+### Preparar a pasta e a rede
+
+Clone pelo Windows e acesse a mesma pasta pelo WSL:
+
+```powershell
+git clone https://github.com/PedroHenryqueO/projeto-01-devops-vagrant-ansible-ifpb.git
+cd projeto-01-devops-vagrant-ansible-ifpb
+```
+
+Vagrant e VBoxManage devem estar disponíveis no terminal do Windows.
+
+Antes de criar as VMs, confira:
+
+```powershell
+VBoxManage list hostonlyifs
+VBoxManage list dhcpservers
+```
+
+A rede host-only deve usar `192.168.56.1/24`. O cadastro DHCP do VirtualBox deve ter servidor `.2` e faixa `.3–.254`; o gatilho do projeto o desabilita para permitir o DHCP de arq.
+
+Em outro computador, se essa rede ainda não existir, prepare-a após verificar conflitos:
 
 ```powershell
 VBoxManage hostonlyif create
@@ -61,104 +97,113 @@ VBoxManage dhcpserver add --network="HostInterfaceNetworking-ADAPTADOR" --server
 $env:ASA_PROJ1_HOSTONLY_NAME = "ADAPTADOR"
 ```
 
-Vagrantfile é a fonte definitiva. O estado padrão .vagrant é local/ignorado.
-Nunca reutilizar metadados de outro computador.
+Substitua `ADAPTADOR` pelo nome real. Não altere uma rede compartilhada sem avaliar seu uso. Se já houver cadastro DHCP, confira seus parâmetros em vez de tentar criá-lo novamente.
 
-## Ordem de criação e configuração
+### Criar e configurar arq
 
-1. Windows: `scripts\projeto.cmd up-arq --aprovar-vm --aprovar-dhcp`.
-   O gatilho afeta somente o DHCP host-only aprovado; a chave da box é mantida.
-2. `vagrant ssh-config arq`: obter o caminho IdentityFile da chave fornecida pelo
-   Vagrant. `vagrant ssh arq -c 'cat /etc/ssh/ssh_host_ed25519_key.pub'`: obter a
-   chave **pública** do host pelo canal administrativo confiável.
-3. No WSL, converter o caminho da chave Windows com wslpath quando necessário:
+No Windows:
+
+```powershell
+scripts\projeto.cmd up-arq --aprovar-vm --aprovar-dhcp
+vagrant ssh-config arq
+vagrant ssh arq -c "cat /etc/ssh/ssh_host_ed25519_key.pub"
+```
+
+Use o `IdentityFile` mostrado pelo Vagrant e a chave **pública** retornada pelo último comando.
+
+No WSL, dentro da pasta do projeto:
 
 ```bash
-python3 scripts/preparar-controlador.py --vagrant-key CAMINHO_DA_CHAVE --host-key 'ssh-ed25519 CHAVE_PUBLICA'
-bash scripts/ansible.sh ping
-bash scripts/ansible.sh syntax
-# Primeiro base/DHCP/DNS, sem operar discos:
-ANSIBLE_CONFIG="$PWD/ansible.cfg" ansible-playbook ansible/site.yml --tags base,dhcp,dns
-# Descoberta por UUID VirtualBox e serial, sem escrita nos discos:
+export ANSIBLE_CONFIG="$PWD/ansible.cfg"
+ansible-galaxy collection install -r ansible/requirements.yml
+python3 scripts/preparar-controlador.py \
+  --vagrant-key "$(wslpath 'CAMINHO_IDENTITYFILE')" \
+  --host-key 'ssh-ed25519 CHAVE_PUBLICA_ARQ'
+ansible-playbook ansible/site.yml --tags base,dhcp,dns
 python3 scripts/manifesto-discos.py
-# Só depois de autorizar os três discos novos e o LV:
-bash scripts/ansible.sh storage
-bash scripts/ansible.sh verify-storage
 ```
 
-O manifesto ansible/host_vars/arq.yml é gerado por instância e ignorado no Git.
-O validador rejeita ancestrais do disco do SO, tamanhos/seriais diferentes,
-partições/assinaturas desconhecidas e LVM externo. Não usar force para contornar
-um bloqueio. Reaplicações aceitam os PVs/LV esperados sem reformatação.
+Mantenha `ANSIBLE_CONFIG` definido nas sessões usadas para o projeto. O manifesto identifica os discos desta VM e gera `ansible/host_vars/arq.yml` localmente; ele não é versionado.
 
-4. Com DHCP/DNS/NFS de arq prontos, criar **uma por vez**:
-   `scripts\projeto.cmd up-db --aprovar-vm --aprovar-dhcp`, depois up-app e up-cli.
-   O bootstrap só configura DHCP privado e preserva o default NAT.
-5. Para cada cliente, obter IP e chave pública pelo `vagrant ssh NOME`; registrar
-   em JSON local `{"name":"db","ip":"192.168.56.121","hostkey":"ssh-ed25519 ..."}`.
-   No WSL, `python3 scripts/registrar-cliente.py CAMINHO_JSON` registra inventário
-   e known_hosts; depois `bash scripts/configurar-cliente.sh db` e
-   `bash scripts/verificar-cliente.sh db`. Repetir para app e cli.
-   cli permanece DHCP dinâmico: atualizar inventário se sua concessão mudar.
+Confira a identificação dos três discos antes de executar:
 
-As chaves individuais são geradas em ~/.local/share/asa-proj1/keys, modo 600,
-fora do repositório; ASA_PROJ1_STATE_DIR permite outro diretório protegido.
-A chave da box é criada/disponibilizada pelo próprio Vagrant, não depende de
-uma chave pessoal do autor. TSIG é gerada no convidado, nunca versionada.
+```bash
+ansible-playbook ansible/site.yml --tags storage,nfs
+```
 
-## DNS e Firefox
+Essa etapa cria o LVM e o filesystem. O validador bloqueia discos inesperados; não use opções forçadas para contornar uma divergência. As chaves e o manifesto devem ser preparados neste ambiente, sem copiar metadados de outra instalação.
 
-Clientes recebem DNS .120 por DHCP; cli tem A/PTR atualizados por TSIG.
-Consultas explícitas: `dig @192.168.56.120 cli.pedro.henryque.devops`.
-Para resolução **normal** no Windows/WSL, este ambiente usa somente a regra NRPT
-`.pedro.henryque.devops` → `192.168.56.120`, comentário `ASA-Proj1`. Ela foi
-criada com autorização em 12/11/2026; os DNS gerais e as demais regras foram
-comparados antes/depois e permaneceram inalterados. Os quatro nomes resolveram
-normalmente no Windows e no WSL, e o acesso externo HTTPS retornou 200 em ambos.
-Em outro computador, WSL com DNS tunneling pode herdar a política; testar antes
-de assumir. Não modificar resolv.conf, servidores DNS gerais ou adaptadores
-como tentativa automática de correção.
+### Criar e configurar os clientes
 
-Criação idempotente, em PowerShell **como administrador**, após autorização:
+Crie uma máquina por vez, depois que DHCP, DNS e NFS de arq estiverem funcionando:
 
 ```powershell
-$rules = @(Get-DnsClientNrptRule | Where-Object {
-    @($_.Namespace) -contains '.pedro.henryque.devops'
-})
-if ($rules.Count -eq 0) {
-    Add-DnsClientNrptRule -Namespace '.pedro.henryque.devops' -NameServers '192.168.56.120' -Comment 'ASA-Proj1'
-} elseif ($rules.Count -ne 1 -or @($rules[0].Namespace).Count -ne 1 -or
-          $rules[0].Comment -ne 'ASA-Proj1' -or
-          (@($rules[0].NameServers) -join ',') -ne '192.168.56.120') {
-    throw 'Regra existente divergente; interromper sem substituir.'
-}
-'arq','db','app','cli' | ForEach-Object {
-    Resolve-DnsName "${_}.pedro.henryque.devops" -Type A
-}
-Resolve-DnsName deb.debian.org -Type A
+scripts\projeto.cmd up-db --aprovar-vm --aprovar-dhcp
 ```
 
-Remoção **somente dessa regra**, também como administrador e após autorização.
-O filtro confere domínio, destino e comentário; divergência interrompe a operação:
+Pelo `vagrant ssh db`, consulte o endereço privado e a chave pública do host:
+
+```bash
+ip -4 address
+cat /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+No WSL, salve um JSON local, por exemplo `/tmp/db.json`:
+
+```json
+{"name":"db","ip":"192.168.56.121","hostkey":"ssh-ed25519 CHAVE_PUBLICA_DB"}
+```
+
+Registre e configure:
+
+```bash
+python3 scripts/registrar-cliente.py /tmp/db.json
+ansible-playbook ansible/client-site.yml --limit db
+```
+
+Repita o procedimento para app e depois cli, usando `up-app` e `up-cli`, os nomes e IPs correspondentes no JSON e `--limit app` ou `--limit cli`. cli usa DHCP dinâmico; confira sua concessão e atualize o inventário quando necessário.
+
+As chaves ficam em `~/.local/share/asa-proj1/keys`, fora do repositório. Se uma chave de host mudar, confira a identidade da VM antes de substituir o registro.
+
+### Resolver os nomes no Windows e WSL
+
+Os convidados recebem o DNS de arq. No Windows, a regra NRPT encaminha apenas o domínio do projeto para esse servidor.
+
+Em PowerShell como administrador, consulte as regras existentes:
 
 ```powershell
-$rules = @(Get-DnsClientNrptRule | Where-Object {
-    @($_.Namespace) -contains '.pedro.henryque.devops'
-})
-if ($rules.Count -ne 1 -or @($rules[0].Namespace).Count -ne 1 -or
-    $rules[0].Comment -ne 'ASA-Proj1' -or
-    (@($rules[0].NameServers) -join ',') -ne '192.168.56.120') {
-    throw 'Nao foi encontrada uma unica regra correspondente; nada removido.'
-}
-Remove-DnsClientNrptRule -Name $rules[0].Name -Force
+Get-DnsClientNrptRule
 ```
 
-Após removê-la, os nomes privados deixam de resolver normalmente no hospedeiro;
-os DNS gerais permanecem como estavam. Consultas explícitas a .120 ainda podem
-ser usadas. No WSL, validar com `getent ahostsv4 arq.pedro.henryque.devops` e
-repetir para db/app/cli, além de `curl -I https://deb.debian.org/debian/`.
+Se não houver regra para esse domínio, crie:
 
-Teste manual no WSL (substituir IP se a concessão mudar):
+```powershell
+Add-DnsClientNrptRule -Namespace '.pedro.henryque.devops' -NameServers '192.168.56.120' -Comment 'ASA-Proj1'
+```
+
+Se já existir, confira namespace, servidor e comentário antes de reutilizá-la. Não substitua os DNS gerais.
+
+Confira a resolução:
+
+```powershell
+Resolve-DnsName app.pedro.henryque.devops
+```
+
+No WSL:
+
+```bash
+getent ahostsv4 app.pedro.henryque.devops
+```
+
+O WSL com DNS tunneling pode utilizar a regra do Windows. Confirme o funcionamento antes de executar o verificador.
+
+Para remover a regra posteriormente, consulte seu identificador com `Get-DnsClientNrptRule` e use `Remove-DnsClientNrptRule -Name IDENTIFICADOR`, somente após conferir que corresponde ao domínio, servidor e comentário acima.
+
+### Acessar a página
+
+No Windows: `http://app.pedro.henryque.devops`.
+
+Para executar Firefox em cli pelo WSLg:
 
 ```bash
 ssh -X -i "$HOME/.local/share/asa-proj1/keys/henryque" \
@@ -166,97 +211,33 @@ ssh -X -i "$HOME/.local/share/asa-proj1/keys/henryque" \
   henryque@192.168.56.50 firefox-esr http://app.pedro.henryque.devops
 ```
 
-Não exige instalação de servidor X no Windows: o ambiente testado usa WSLg.
-Se DISPLAY estiver vazio, abrir sessão WSLg funcional. Não desabilitar controles
-de segurança para resolver erros gráficos. A página foi confirmada visualmente pelo aluno em 12/11/2026; em outra
-instalação, repetir o teste manual, além da verificação dos pacotes.
+Substitua `.50` caso a concessão de cli seja diferente. Inicie arq antes dos clientes e desligue-a por último.
 
-cli usa 2 CPUs após ajuste autorizado em 12/11/2026; mantém os 1024 MB do
-enunciado, que não especifica quantidade de CPUs. O aluno confirmou visualmente
-melhora significativa após o ajuste. O encaminhamento X11 ainda pode ter latência.
-As demais VMs mantêm seus recursos. Para apresentar, fechar manualmente programas
-desnecessários no hospedeiro, demonstrar Firefox remoto pelo comando acima e
-depois usar o navegador do Windows em `http://app.pedro.henryque.devops` para
-exibir a página com maior fluidez. Não requer alteração do DNS ou dos serviços.
+## 7. Verificação do funcionamento
 
-## Testes e verificador
+No ambiente utilizado, foram comprovados DHCP, reservas, DDNS real de cli, DNS direto/reverso, SSH, sudo, Chrony, LVM, montagem persistente, NFS/autofs, escrita por app e leitura por db/cli, mapeamento para `nfs-ifpb`, MariaDB, Apache e Firefox remoto. Também foram verificadas a persistência após reinicializações e a reaplicação Ansible sem alterações.
 
-```bash
-bash scripts/ansible.sh verify
-bash scripts/ansible.sh verify-storage
-ANSIBLE_CONFIG="$PWD/ansible.cfg" ansible-playbook ansible/verify-integration.yml
-# Reaplicação: esperar changed=0 depois de completar configuração.
-ANSIBLE_CONFIG="$PWD/ansible.cfg" ansible-playbook ansible/client-site.yml
-```
+O verificador original do professor foi executado em **12/11/2026**, com DNS normal: **retorno 0, STDERR vazio e nenhuma mensagem de falha reportada**.
 
-Inspecionar pvs/vgs/lvs, findmnt /dados, exportfs -v, chronyc sources,
-systemctl status, HTTP e logs. Os testes NFS temporários limpam os próprios
-arquivos; a integração deixa pedro.txt/henryque.txt para demonstração.
+Para executá-lo novamente, obtenha o original pelo professor/Classroom e coloque-o em `referencias/verifica-proj1.py`. Crie a pasta `referencias` se necessário. O original não é distribuído por falta de autorização de redistribuição.
 
-Obter o script original do professor conforme referencias/README.md. Ele cria/
-remove intruso e sobrescreve arquivos NFS; executar apenas com autorização,
-conta/home intruso ausentes e dados preexistentes preservados. Com DNS normal,
-chaves e DISPLAY prontos: `python3 scripts/verificador-oficial.py` no WSL.
-O runner executa o original intacto em diretório com keys, captura sua saída e
-prepara SSH não interativo. O código de saída não representa nota: o original
-oculta erros e tem limitações de quoting e de testes sem chave; usar os testes
-independentes para distinguir defeito real de limitação do avaliador.
+Use uma sessão WSLg com display funcional. O auxiliar exige ausência prévia de `intruso`, de seu home e da chave temporária. Também espera os arquivos `pedro.txt` e `henryque.txt` existentes no NFS.
 
-O runner restaura os arquivos NFS preservados e remove a conta temporária ao
-terminar. Teste complementar
-real da restrição de grupos (exige a chave intruso gerada pelo original):
+Em uma instalação nova, crie esses arquivos de demonstração somente se estiverem ausentes:
 
 ```bash
-ANSIBLE_CONFIG="$PWD/ansible.cfg" ansible-playbook ansible/testar-intruso.yml
+ansible app -b -m ansible.builtin.shell \
+  -a 'for u in pedro henryque; do test -e /var/nfs/$u.txt || touch /var/nfs/$u.txt; done'
 ```
 
-## Reinício e desligamento
+Execute:
 
-Só com autorização: `bash scripts/validar-reboots.sh` reinicia normalmente arq,
-valida-a e depois db/app/cli uma por vez. Não faz reset forçado. Para desligar,
-usar `vagrant halt cli`, `app`, `db`, e arq por último; iniciar arq antes dos
-clientes. Nunca usar destroy para resolver uma indisponibilidade sem aprovação.
+```bash
+python3 scripts/verificador-oficial.py
+```
 
-## Estado, limites e entrega
+O auxiliar executa o original sem modificá-lo, preserva os arquivos NFS e realiza a limpeza posterior. Os logs ficam locais.
 
-Resultados detalhados: [matriz de requisitos](docs/MATRIZ-REQUISITOS.md).
-No ambiente original, os quatro convidados passaram pelos testes de SSH/sudo,
-Chrony, DHCP/DNS/DDNS, armazenamento e serviços após reinícios normais. A última
-reaplicação Ansible terminou com changed=0, failed=0 e unreachable=0 nas quatro
-VMs. O verificador original retornou 0, complementado pelos testes independentes
-documentados acima. Código 0 não equivale a uma nota automática.
+O retorno do verificador não substitui todas as verificações: ele oculta alguns erros e abre Firefox em segundo plano.
 
-Última execução do original: **12/11/2026**, com DNS normal do WSL e cli com
-2 CPUs/1024 MB, usando o argumento `pedro.henryque`. O arquivo original manteve
-seu hash; retorno **0**, sem mensagens de falha reportadas e STDERR vazio.
-Os pré-requisitos incluíram chaves com modo 600, DNS dos quatro hosts, SSH/X11
-funcional e ausência prévia de conta/home intruso. Os arquivos NFS pedro.txt e
-henryque.txt foram preservados antes da execução e restaurados depois, com
-SHA-256, tamanho, UID/GID e modo idênticos. Conta intruso, home e chave temporária
-ficaram ausentes nas quatro VMs. Não houve reinício ou alteração de hardware.
-A saída integral e os manifestos de conferência permanecem locais e ignorados
-pelo Git. As limitações de quoting, erros ocultos e Firefox assíncrono do
-verificador impedem tratar apenas seu retorno como prova de todos os requisitos.
-
-Collections atuais emitem avisos de depreciação não bloqueantes. Para indisponibilidade,
-verificar memória, journal do convidado e logs do VirtualBox antes de atribuir a
-causa a recursos ou fazer qualquer reinício forçado.
-
-**Uma reprodução integral a partir de clone limpo não foi executada.** Os comandos
-e descoberta de identidades foram preparados/validados sem destruir as VMs atuais.
-Ainda é necessário validar esse fluxo num outro ambiente autorizado.
-Originais do professor, logs brutos, metadados, discos, chaves e manifesto local
-estão excluídos do Git. Publicação remota exige autorização final do aluno.
-
-O repositório contém a implementação, os auxiliares de implantação/verificação
-e a documentação de entrega. PROGRESSO.md, planos intermediários, relatórios
-operacionais e evidências brutas são registros locais, não distribuídos. As
-menções a PROGRESSO.md na página do ambiente original referem-se a esses registros;
-a síntese pública está nesta seção e na matriz. Nenhum registro local é necessário
-para executar os playbooks ou reproduzir a configuração.
-
-Para a entrega, revisar `git diff --cached --stat`, `git diff --cached` e
-`git status`. Após aprovar o conteúdo, o destino e a visibilidade, criar o
-commit, configurar o remote aprovado e publicar a branch principal. Os materiais
-do professor devem ser obtidos separadamente: não há licença de redistribuição
-comprovada. Não incluir evidências brutas ou arquivos ignorados usando `git add -f`.
+**Uma implantação integral em ambiente novo ainda não foi testada.**

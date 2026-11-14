@@ -1,4 +1,5 @@
 ---
+# Configura arq antes dos clientes que dependem de DHCP, DNS e NFS.
 - name: Configuracao do servidor de arquivos e rede
   hosts: fileservers
   become: true

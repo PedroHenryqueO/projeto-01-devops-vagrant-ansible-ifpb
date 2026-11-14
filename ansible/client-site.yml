@@ -1,4 +1,5 @@
 ---
+# Reutiliza a configuração básica e o autofs nos três clientes.
 - name: Configurar convidados clientes
   hosts: clients
   become: true

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executar no WSL; copiar chave autorizada e gerar chaves pessoais fora do Git."""
+"""Prepara as chaves no WSL e mantém as chaves privadas fora do repositório."""
 import argparse
 import os
 from pathlib import Path

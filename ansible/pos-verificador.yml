@@ -1,4 +1,5 @@
 ---
+# Remove os arquivos temporários e restaura os dados após o verificador.
 - name: Limpar exclusivamente artefatos do teste autorizado
   hosts: lab
   become: true

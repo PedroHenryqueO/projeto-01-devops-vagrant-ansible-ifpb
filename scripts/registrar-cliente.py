@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Registra o IP e a chave pública do cliente para o acesso pelo Ansible."""
 import json,sys,re,os
 from pathlib import Path
 data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8-sig'))
