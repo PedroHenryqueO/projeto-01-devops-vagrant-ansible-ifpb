@@ -1,11 +1,12 @@
 # -*- mode: ruby -*-
 # Cria as VMs; o Ansible configura os serviços.
-# Use scripts/projeto.cmd para iniciar as máquinas.
+# No Linux, use scripts/instalar.sh; no Windows, scripts/projeto.cmd.
 require "open3"
 
 Vagrant.configure("2") do |config|
   domain = "pedro.henryque.devops"
-  hostonly = ENV.fetch("ASA_PROJ1_HOSTONLY_NAME", "VirtualBox Host-Only Ethernet Adapter")
+  default_hostonly = Vagrant::Util::Platform.windows? ? "VirtualBox Host-Only Ethernet Adapter" : "vboxnet0"
+  hostonly = ENV.fetch("ASA_PROJ1_HOSTONLY_NAME", default_hostonly)
   network = "HostInterfaceNetworking-#{hostonly}"
   vboxmanage = ENV.fetch("VBOXMANAGE", "VBoxManage")
 
@@ -15,7 +16,7 @@ Vagrant.configure("2") do |config|
     "arq" => { ram: 512,  port: 2220, mac: "022026000020", ip: "192.168.56.120" },
     "db"  => { ram: 512,  port: 2221, mac: "022026000021" },
     "app" => { ram: 512,  port: 2223, mac: "022026000022" },
-    "cli" => { ram: 1024, cpus: 2, port: 2224, mac: "022026000023" }
+    "cli" => { ram: 2048, cpus: 2, port: 2224, mac: "022026000023" }
   }
 
   # Executa o VBoxManage apenas quando o gatilho é chamado.

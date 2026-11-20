@@ -1,9 +1,10 @@
 ---
-- name: Atualizar indices e sistema sem reinicio automatico
+- name: Atualizar os indices do APT
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
-    upgrade: dist
+    # Atualização completa desativada por orientação do professor.
+    # upgrade: dist
     lock_timeout: 180
 
 - name: Instalar pacotes comuns sem iniciar servicos antes da configuracao

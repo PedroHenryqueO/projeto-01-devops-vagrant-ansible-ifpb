@@ -10,7 +10,7 @@ for h in hosts:
     if ip != inventory[h]['ansible_host']: raise SystemExit('DNS diverge do inventario aprovado: '+h)
 for user in ['pedro','henryque']:
     if not (state/'keys'/user).is_file(): raise SystemExit('Chave ausente: '+user)
-if not os.environ.get('DISPLAY'): raise SystemExit('DISPLAY ausente; usar WSLg')
+if not os.environ.get('DISPLAY'): raise SystemExit('DISPLAY ausente; use uma sessão gráfica com X11 e xauth')
 if not (root/'referencias/verifica-proj1.py').is_file(): raise SystemExit('Obter original com o professor')
 os.environ['ANSIBLE_CONFIG']=str(root/'ansible.cfg')
 subprocess.run(['ansible-playbook',str(root/'ansible/pre-verificador.yml')],cwd=root,check=True)
