@@ -91,7 +91,7 @@ O adaptador padrão é `vboxnet0` no Linux. Para usar outro adaptador, defina an
 export ASA_PROJ1_HOSTONLY_NAME=vboxnet1
 ```
 
-O adaptador deve estar livre para o projeto e usar `192.168.56.1/24`. O cadastro DHCP do VirtualBox usa `.2`, faixa `.3–.254`, e fica desativado. Se outra VM usar o adaptador, o script interrompe antes de alterá-lo.
+O adaptador deve usar `192.168.56.1/24`. O cadastro DHCP do VirtualBox usa `.2`, faixa `.3–.254`, e fica desativado. Outras VMs podem estar registradas no mesmo adaptador, desde que totalmente desligadas e sem conflitos de nomes ou MACs. Mantenha-as desligadas durante o uso do projeto; VMs em execução, pausadas ou com estado salvo bloqueiam a instalação.
 
 As chaves, os registros de convidados e o estado do DNS ficam em `~/.local/share/asa-proj1`. Para separar outro ambiente, defina `ASA_PROJ1_STATE_DIR` antes de instalar. O estado é vinculado à pasta do clone; não copie `.vagrant`, chaves ou manifestos de outro computador.
 

@@ -55,7 +55,9 @@ for line in run('VBoxManage','list','vms').splitlines():
  if uid in owned: continue
  require(name not in ['ASA-Proj1-'+n for n in specs],'Nome já usado por VM sem vínculo com este clone: '+name)
  vm=info(uid)
- require(not any(k.startswith('hostonlyadapter') and v==adapter for k,v in vm.items()),'Outra VM usa o adaptador '+adapter+': '+name)
+ if any(k.startswith('hostonlyadapter') and v==adapter for k,v in vm.items()):
+  require(vm.get('VMState')=='poweroff','Outra VM não está desligada e usa o adaptador '+adapter+': '+name)
+  print('VM de outro ambiente desligada: '+name+'; mantenha-a desligada enquanto o projeto usar '+adapter)
  require(not any(k.startswith('macaddress') and v.lower() in [s[3].lower() for s in specs.values()] for k,v in vm.items()),'MAC do projeto já usado por outra VM')
 for port in [s[2] for s in specs.values()]:
  if port in running_ports: continue
@@ -268,7 +270,7 @@ PY
         ansible-galaxy collection list -p "$STATE/collections" --format json > "$STATE/collections.json"
         colecoes_corretas || falhar 'As versões das collections não correspondem ao requirements.yml'
     fi
-    if ! vagrant box list | grep -Eq "^debian/bookworm64[[:space:]]+\(virtualbox,[[:space:]]+$BOX_VERSION\)"; then
+    if ! vagrant box list | grep -E "^debian/bookworm64[[:space:]]+\(virtualbox,[[:space:]]+${BOX_VERSION//./\\.}(,[[:space:]]+\(amd64\))?\)[[:space:]]*$" >/dev/null; then
         vagrant box add debian/bookworm64 --provider virtualbox --box-version "$BOX_VERSION"
     fi
     vagrant validate
