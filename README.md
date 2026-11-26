@@ -55,7 +55,7 @@ cd projeto-01-devops-vagrant-ansible-ifpb
 vagrant up
 ```
 
-**Esta refatoração está apenas na branch local `codex/vagrant-up-simples`, sem publicação.** Até sua aprovação e publicação, um clone da main ainda recebe o fluxo anterior. No teste desta revisão, copie o conteúdo da branch ou use um clone local dela.
+A branch principal (`main`) contém esta versão simplificada. A versão anterior está preservada na branch `backup/main-antes-simplificacao-5883892`.
 
 O VirtualBox executa as máquinas em sequência: arq é criada e provisionada antes de db, app e cli. Antes de cada cliente, o Vagrant confirma que DNS, DHCP, NFS e `/dados` estão disponíveis em arq. Não use `--parallel` nem `--no-provision` na instalação inicial.
 
