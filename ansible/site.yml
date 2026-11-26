@@ -1,12 +1,6 @@
 ---
-# Configura arq antes dos clientes que dependem de DHCP, DNS e NFS.
-- name: Configuracao do servidor de arquivos e rede
-  hosts: fileservers
-  become: true
-  roles:
-    - role: base
-      tags: [base]
-    - role: network_server
-      tags: [dhcp, dns]
-    - role: storage_nfs
-      tags: [storage, nfs]
+# O Vagrant limita a execucao a VM que esta sendo provisionada.
+- import_playbook: base.yml
+- import_playbook: dhcp-dns.yml
+- import_playbook: lvm-nfs.yml
+- import_playbook: clientes.yml

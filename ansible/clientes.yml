@@ -1,0 +1,89 @@
+---
+- name: Configurar autofs e os servicos dos clientes
+  hosts: clients
+  become: true
+  tasks:
+    - name: Preservar DNS interno nas renovacoes DHCP
+      ansible.builtin.blockinfile:
+        path: /etc/dhcp/dhclient.conf
+        marker: "# {mark} ASA CLIENT DNS"
+        block: |
+          prepend domain-name-servers 192.168.56.120;
+          supersede domain-search "{{ domain }}";
+
+    # Monta o compartilhamento NFS quando /var/nfs é acessado.
+    - name: Instalar autofs e cliente NFS
+      ansible.builtin.apt:
+        name: [autofs, nfs-common]
+        state: present
+
+    - name: Configurar mapa direto em arquivo separado
+      ansible.builtin.copy:
+        dest: /etc/auto.master.d/asa-proj1.autofs
+        content: "/- /etc/auto.asa-proj1 --timeout=60\n"
+        mode: '0644'
+      notify: Reiniciar autofs
+
+    - name: Mapear compartilhamento por demanda
+      ansible.builtin.copy:
+        dest: /etc/auto.asa-proj1
+        content: "/var/nfs -fstype=nfs4,rw,hard,proto=tcp arq.{{ domain }}:/dados/nfs\n"
+        mode: '0644'
+      notify: Reiniciar autofs
+
+    - name: Garantir autofs habilitado
+      ansible.builtin.service:
+        name: autofs
+        enabled: true
+        state: started
+
+    - name: Aplicar mapas do autofs
+      ansible.builtin.meta: flush_handlers
+
+    - name: Instalar MariaDB
+      ansible.builtin.apt:
+        name: mariadb-server
+        state: present
+      when: inventory_hostname == 'db'
+    - name: Habilitar MariaDB
+      ansible.builtin.service:
+        name: mariadb
+        enabled: true
+        state: started
+      when: inventory_hostname == 'db'
+    - name: Instalar Apache
+      ansible.builtin.apt:
+        name: apache2
+        state: present
+      when: inventory_hostname == 'app'
+    - name: Publicar pagina academica
+      ansible.builtin.copy:
+        src: files/index.html
+        dest: /var/www/html/index.html
+        mode: '0644'
+      when: inventory_hostname == 'app'
+    - name: Habilitar Apache
+      ansible.builtin.service:
+        name: apache2
+        enabled: true
+        state: started
+      when: inventory_hostname == 'app'
+    - name: Instalar ferramentas graficas
+      ansible.builtin.apt:
+        name: [firefox-esr, xauth, x11-utils]
+        state: present
+      when: inventory_hostname == 'cli'
+
+    - name: Criar arquivos de demonstracao sem substituir dados existentes
+      ansible.builtin.copy:
+        dest: "/var/nfs/{{ item }}.txt"
+        content: "Dados NFS de {{ item }}\n"
+        force: false
+        mode: '0644'
+      loop: "{{ academic_users }}"
+      when: inventory_hostname == 'app'
+  handlers:
+    - name: Reiniciar autofs
+      ansible.builtin.service:
+        name: autofs
+        state: restarted

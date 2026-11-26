@@ -2,9 +2,12 @@
 # Define os usuários, endereços e MACs usados pelos playbooks.
 domain: pedro.henryque.devops
 academic_users: [pedro, henryque]
-controller_state: "{{ lookup('ansible.builtin.env', 'ASA_PROJ1_STATE_DIR') | default(lookup('ansible.builtin.env', 'HOME') + '/.local/share/asa-proj1', true) }}"
-ansible_ssh_private_key_file: "{{ controller_state }}/keys/vagrant"
-ansible_ssh_common_args: "-o UserKnownHostsFile={{ controller_state }}/known_hosts -o StrictHostKeyChecking=yes"
+# Chaves e manifesto sao gerados pelo Vagrant e ficam fora do Git.
+controller_state: "{{ playbook_dir }}/../.vagrant/asa"
+ansible_ssh_common_args: '-o UserKnownHostsFile="{{ controller_state }}/known_hosts" -o StrictHostKeyChecking=yes'
+nfs_uid: 2048
+nfs_gid: 2048
+storage_disks: "{{ (lookup('ansible.builtin.file', controller_state + '/storage.json') | from_json).storage_disks }}"
 private_network: 192.168.56.0
 private_netmask: 255.255.255.0
 private_cidr: 192.168.56.0/24

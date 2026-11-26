@@ -1,224 +1,175 @@
-# Projeto 01 — DevOps com Vagrant e Ansible
+# Projeto 01 — Vagrant e Ansible
 
-## 1. Identificação
+## 1. Identificação e objetivo
 
 IFPB — Campus João Pessoa · Tecnologia em Redes de Computadores
 Administração de Sistemas Abertos · Professor Leonidas Lima · 2026.2
 **Aluno:** Pedro Henryque de Oliveira · **Matrícula:** 20251380020
 
-Projeto individual, com os usuários `pedro` e `henryque`. Entrega: **20/11/2026**. Apresentação: **23/11/2026**, no Ubuntu do professor.
+Criar quatro máquinas Debian e configurar os serviços com Vagrant e Ansible. O controlador desta versão é **Ubuntu nativo**, com VirtualBox. Não execute o fluxo pelo Windows/WSL.
 
-## 2. Objetivo
+## 2. Infraestrutura e serviços
 
-Criar quatro máquinas Debian com Vagrant e configurar serviços Linux com Ansible. A execução principal é no Ubuntu nativo; Windows com WSL permanece como alternativa manual.
+| VM | RAM / CPUs | Rede privada | Serviços |
+|---|---|---|---|
+| arq | 512 MB / 1 | 192.168.56.120 | DHCP, DNS/DDNS, Chrony, LVM e NFS |
+| db | 512 MB / 1 | 192.168.56.121 por reserva DHCP | MariaDB e autofs |
+| app | 512 MB / 1 | 192.168.56.122 por reserva DHCP | Apache, página acadêmica e autofs |
+| cli | 2048 MB / 2 | DHCP dinâmico, .50–.100 | Firefox ESR, X11 e autofs |
 
-## 3. Infraestrutura
+Domínio: `pedro.henryque.devops`. A NAT fornece internet. A rede privada usa `192.168.56.0/24`, adaptador `vboxnet0` e MACs terminados em `20`, `21`, `22` e `23`. SSH pela NAT: portas locais 2220, 2221, 2223 e 2224.
 
-| VM | RAM | CPUs | IP privado | Serviços |
-|---|---:|---:|---|---|
-| arq | 512 MB | 1 | 192.168.56.120 | DHCP, DNS/DDNS, LVM e NFS |
-| db | 512 MB | 1 | 192.168.56.121, reserva DHCP | MariaDB e autofs |
-| app | 512 MB | 1 | 192.168.56.122, reserva DHCP | Apache, página acadêmica e autofs |
-| cli | 2048 MB | 2 | DHCP, faixa .50–.100 | Firefox ESR, X11 e autofs |
+arq tem três discos de 10 GiB, VG `dados`, LV `ifpb` de 15 GiB, ext4 e montagem persistente em `/dados`. `/dados/nfs` é exportado com `sync` e `all_squash` para `nfs-ifpb` (UID/GID 2048). Os clientes usam autofs em `/var/nfs`.
 
-Domínio: `pedro.henryque.devops`. NAT mantém o acesso à internet; a rede host-only usa `192.168.56.0/24`. Portas SSH locais: 2220, 2221, 2223 e 2224, nessa ordem.
+Todas as VMs recebem Chrony com `pool.ntp.br`, timezone `America/Recife`, grupo `ifpb`, usuários `pedro` e `henryque`, chaves individuais, sudo e cliente NFS. SSH aceita chaves, bloqueia root e permite apenas os grupos `vagrant` e `ifpb`.
 
-arq recebe três discos de 10 GiB. O VG `dados` contém o LV `ifpb`, com 15 GiB, ext4 e montagem em `/dados`. `/dados/nfs` é exportado para a rede privada com `sync` e `all_squash`, usando `nfs-ifpb` (UID/GID 2048). Os clientes acessam `/var/nfs` por autofs.
+DHCP tem reservas para db/app e faixa dinâmica para cli. DNS tem zonas direta/reversa, encaminhadores `1.1.1.1` e `8.8.8.8` e DDNS autenticado por TSIG para cli. O DHCP atua somente na interface privada.
 
-## 4. Ferramentas utilizadas
+**Exceções autorizadas:** cli usa 2048 MB e 2 CPUs. `upgrade: dist` permanece comentado por orientação do professor; os índices APT continuam sendo atualizados.
 
-Ambiente da implantação manual realizada no laboratório em 18/11/2026:
+## 3. Pré-requisitos
 
-| Ferramenta | Versão |
-|---|---|
-| Ubuntu | 26.04.1 LTS |
-| VirtualBox | 7.2.6 |
-| Vagrant | 2.4.9 |
-| Ansible Core | 2.20.1 |
-| Python | 3.14.4 |
-| ansible.posix / community.general | 2.1.0 / 12.1.0 |
-| debian/bookworm64 | 12.20250126.1 |
+Ubuntu x86_64 com virtualização disponível, VirtualBox 7.2, Vagrant 2.4, Ansible Core 2.20, Python 3.12 ou posterior e OpenSSH. O driver `/dev/vboxdrv` precisa funcionar. Reserve pelo menos 20 GiB livres para box/discos e aproximadamente 4,5 GiB de RAM disponível para convidados e margem do hospedeiro; mantenha folga para o Firefox.
 
-Use um hospedeiro x86_64. Instale VirtualBox e Vagrant previamente, com `VBoxManage` e `vagrant` disponíveis no terminal. O instalador aceita as séries Vagrant 2.4, VirtualBox 7.2 e Ansible Core 2.20. O driver `/dev/vboxdrv` deve estar acessível ao usuário. Problemas de módulos do kernel ou Secure Boot precisam ser resolvidos antes da instalação do projeto.
-
-Prepare o Ansible no Ubuntu:
+Instale VirtualBox e Vagrant pelos procedimentos oficiais. Prepare o controlador:
 
 ```bash
 sudo apt update
-sudo apt install python3-venv openssh-client xauth dnsutils
+sudo apt install git python3-venv openssh-client xauth dnsutils curl
 python3 -m venv ~/.venvs/asa-proj1
 source ~/.venvs/asa-proj1/bin/activate
 python3 -m pip install ansible-core==2.20.1
 ```
 
-São necessários acesso a sudo, internet e espaço para a box e os discos dinâmicos. O instalador exige pelo menos 20 GiB livres nas localizações verificadas e RAM suficiente para iniciar as VMs, com margem de 1 GiB. O laboratório tinha aproximadamente 12 GiB disponíveis e 68 GB livres. Deixe folga: os discos podem crescer durante o uso.
+O Vagrant instala as collections de `ansible/requirements.yml` durante o provisionamento. Não precisa instalar Ruby separadamente: ele acompanha o Vagrant.
 
-## 5. Serviços configurados
+Use uma rede isolada. O projeto recusa adaptadores cadastrados em VMs de terceiros, inclusive desligadas, pois o gatilho interrompe o DHCP dessa rede. Não desligue nem altere VMs de outras pessoas para contornar a proteção. Se houver conflito, combine uma rede livre com o professor; o nome pode ser escolhido com `ASA_PROJ1_HOSTONLY_NAME=vboxnet1`, mantendo a sub-rede exigida livre.
 
-Todas as VMs recebem Chrony com `pool.ntp.br`, timezone `America/Recife`, grupo `ifpb`, usuários e chaves individuais, sudo e cliente NFS. SSH aceita somente chaves, bloqueia root e permite os grupos `vagrant` e `ifpb`.
+## 4. Criar e provisionar
 
-arq fornece DHCP autoritativo, reservas de db/app e DNS direto/reverso. cli continua com IP dinâmico e usa DDNS autenticado por TSIG. Os encaminhadores são `1.1.1.1` e `8.8.8.8`. O DHCP atua apenas na interface privada.
-
-**Por orientação do professor, `upgrade: dist` está comentado.** O Ansible continua atualizando os índices do APT para instalar os pacotes. As reaplicações não reiniciam automaticamente as máquinas.
-
-## 6. Como executar o projeto
-
-### Instalação no Ubuntu nativo
-
-Com o ambiente virtual do Ansible ativo:
+Com o ambiente virtual ativo:
 
 ```bash
 git clone https://github.com/PedroHenryqueO/projeto-01-devops-vagrant-ansible-ifpb.git
 cd projeto-01-devops-vagrant-ansible-ifpb
-bash scripts/instalar.sh --verificar
-bash scripts/instalar.sh --aprovar
+vagrant up
 ```
 
-Execute como usuário normal. O script usa sudo somente para o DNS do hospedeiro. Ele recusa Windows/WSL, root, conflitos de rede/portas e VMs sem vínculo com os metadados deste clone.
+**Esta refatoração está apenas na branch local `codex/vagrant-up-simples`, sem publicação.** Até sua aprovação e publicação, um clone da main ainda recebe o fluxo anterior. No teste desta revisão, copie o conteúdo da branch ou use um clone local dela.
 
-O instalador:
+O VirtualBox executa as máquinas em sequência: arq é criada e provisionada antes de db, app e cli. Antes de cada cliente, o Vagrant confirma que DNS, DHCP, NFS e `/dados` estão disponíveis em arq. Não use `--parallel` nem `--no-provision` na instalação inicial.
 
-1. Confere ferramentas, recursos, VMs e rede. Instala as collections no estado local e baixa a box fixada, se necessário.
-2. Valida o Vagrantfile e os playbooks; prepara o adaptador e o cadastro DHCP do projeto quando ausentes. Não corrige silenciosamente cadastros existentes divergentes.
-3. Cria arq, obtém sua chave pública pelo Vagrant e testa as chaves privadas disponíveis. Na box usada no laboratório, a RSA funcionou e a Ed25519 não autenticou.
-4. Configura base, DHCP e DNS. Identifica os três discos e configura LVM/NFS usando as validações existentes.
-5. Cria db, app e cli, nessa ordem, registra IPs/chaves públicas e executa `client-site.yml` nos três clientes em paralelo.
-6. Configura o DNS específico do hospedeiro e verifica comunicação, DNS, HTTP, MariaDB e NFS. Cria os arquivos de demonstração somente se ausentes; os testes temporários não substituem esses arquivos.
+O único gatilho DHCP segue a Prática 05, antes de `Vagrant::Action::Builtin::WaitForCommunicator`, com `dhcpserver stop --interface vboxnet0`. O executável pode ser `VBoxManage` ou `vboxmanage`, conforme o sistema. O comando **para o processo**, mantendo o cadastro: não usa `modify --disable`. O cadastro padrão usa servidor `192.168.56.100` e faixa `.101–.254`; o gatilho para esse processo antes do SSH, deixando as concessões para arq. O cadastro necessário é criado apenas em rede livre; configurações existentes divergentes interrompem a instalação.
 
-O adaptador padrão é `vboxnet0` no Linux. Para usar outro adaptador, defina antes:
+As chaves e os metadados ficam em `.vagrant/asa`, ignorada pelo Git. O Vagrant obtém a chave pública pelo seu comunicador, testa os IdentityFiles disponíveis e entrega ao Ansible um inventário pela NAT. Assim, mudanças no IP dinâmico de cli não quebram o provisionamento. Não copie `.vagrant` de outro ambiente nem remova a checagem de identidades ou discos.
 
-```bash
-export ASA_PROJ1_HOSTONLY_NAME=vboxnet1
-```
+Se houver falha, corrija a causa indicada e consulte `vagrant status`. Use `vagrant provision arq` para concluir arq antes de repetir `vagrant up`; para uma VM criada mas não provisionada, use `vagrant provision NOME`. Repetir apenas `up` pode não reaplicar playbooks de uma VM já marcada como provisionada. Não use destroy, reset ou formatação forçada como recuperação.
 
-O adaptador deve usar `192.168.56.1/24`. O cadastro DHCP do VirtualBox usa `.2`, faixa `.3–.254`, e fica desativado. Outras VMs podem estar registradas no mesmo adaptador, desde que totalmente desligadas e sem conflitos de nomes ou MACs. Mantenha-as desligadas durante o uso do projeto; VMs em execução, pausadas ou com estado salvo bloqueiam a instalação.
+## 5. DNS do Ubuntu e desligamento
 
-As chaves, os registros de convidados e o estado do DNS ficam em `~/.local/share/asa-proj1`. Para separar outro ambiente, defina `ASA_PROJ1_STATE_DIR` antes de instalar. O estado é vinculado à pasta do clone; não copie `.vagrant`, chaves ou manifestos de outro computador.
-
-Em outra sessão, reative o ambiente virtual e configure o Ansible:
-
-```bash
-source ~/.venvs/asa-proj1/bin/activate
-export ASA_PROJ1_STATE_DIR="${ASA_PROJ1_STATE_DIR:-$HOME/.local/share/asa-proj1}"
-export ANSIBLE_CONFIG="$PWD/ansible.cfg"
-export ANSIBLE_COLLECTIONS_PATH="$ASA_PROJ1_STATE_DIR/collections"
-```
-
-### DNS do hospedeiro
-
-O instalador aplica somente em `vboxnet0` (ou no adaptador escolhido):
+A configuração global do hospedeiro não é alterada automaticamente. Antes de demonstrar nomes ou executar o verificador, confira `resolvectl status vboxnet0` e registre os valores anteriores de DNS, Domains e DefaultRoute. Com autorização para usar essa interface isolada, configure somente o domínio do projeto:
 
 ```bash
 sudo resolvectl default-route vboxnet0 no
 sudo resolvectl domain vboxnet0 '~pedro.henryque.devops'
 sudo resolvectl dns vboxnet0 192.168.56.120
+getent hosts arq.pedro.henryque.devops db.pedro.henryque.devops app.pedro.henryque.devops cli.pedro.henryque.devops
 ```
 
-Esses comandos mostram a configuração utilizada; normalmente não é necessário executá-los à parte. O instalador salva os valores anteriores. DNS/domínios preexistentes de terceiros interrompem a operação; os DNS gerais e `/etc/resolv.conf` não são alterados.
+Não substitua DNS/domínios de terceiros. Esses comandos exigem systemd-resolved e devem usar o adaptador escolhido. A internet continua usando o DNS geral e a rota padrão do hospedeiro.
 
-Para restaurar somente os valores salvos pelo projeto:
-
-```bash
-bash scripts/instalar.sh --restaurar-dns
-```
-
-A restauração é recusada se o adaptador ou seus valores tiverem mudado de forma inesperada. Não use uma restauração genérica para apagar configurações de terceiros.
-
-### Iniciar e desligar VMs já instaladas
-
-Na pasta do mesmo clone, confira `vagrant status`. Para iniciar sem provisionamento:
-
-```bash
-export ASA_PROJ1_EXECUTION_APPROVED=1
-export ASA_PROJ1_DHCP_CHANGE_APPROVED=1
-export ASA_PROJ1_CLIENT_BOOTSTRAP_READY=1
-vagrant up arq --no-provision
-vagrant ssh arq -c 'sudo sh -c '\''set -e; for s in named isc-dhcp-server chrony nfs-server; do systemctl is-active --quiet "$s"; done; findmnt --mountpoint /dados'\'''
-vagrant up db app cli --no-provision
-bash scripts/instalar.sh --configurar-dns
-```
-
-Se cli receber outro IP, consulte-o com `vagrant ssh cli -c 'ip -4 address'`. Atualize seu JSON de registro com a chave pública conferida pelo SSH do Vagrant e use `python3 scripts/registrar-cliente.py CAMINHO_JSON`. Não ignore erros de chave de host.
-
-Desligue normalmente, uma máquina por vez, na ordem cli, app, db e arq:
+Para desligar normalmente, sem fallback forçado:
 
 ```bash
 vagrant ssh cli -c 'sudo shutdown -h now'
 vagrant ssh app -c 'sudo shutdown -h now'
 vagrant ssh db -c 'sudo shutdown -h now'
 vagrant ssh arq -c 'sudo shutdown -h now'
-bash scripts/instalar.sh --restaurar-dns
+vagrant status
 ```
 
-Espere cada máquina desligar antes da seguinte, conferindo `vagrant status`. A conexão SSH pode fechar durante o desligamento. Não use reset, destroy ou desligamento forçado para contornar uma falha.
+Espere cada VM desligar antes de seguir. Restaure **somente** os valores de DNS registrados antes da apresentação, usando `resolvectl dns`, `domain` e `default-route` na mesma interface. Um valor originalmente vazio pode ser reposto com `''`; não use `revert` indiscriminadamente.
 
-### Demonstração
-
-No navegador do hospedeiro: `http://app.pedro.henryque.devops`.
-
-Firefox remoto, em uma sessão gráfica Ubuntu com `DISPLAY` definido e xauth instalado:
+Após todas as VMs do projeto estarem desligadas, reative o DHCP do VirtualBox **somente se ele estava habilitado antes**, na interface conferida:
 
 ```bash
-ssh -X -i "$ASA_PROJ1_STATE_DIR/keys/henryque" \
-  -o "UserKnownHostsFile=$ASA_PROJ1_STATE_DIR/known_hosts" \
+VBoxManage dhcpserver start --interface vboxnet0
+```
+
+`start` inicia o servidor; `restart` exige que ele já esteja rodando. Não use `--enable` para alterar um cadastro originalmente desabilitado. Para iniciar novamente o projeto, use `vagrant up`: o gatilho para o DHCP concorrente a cada inicialização.
+
+## 6. Verificar e demonstrar
+
+Na pasta do projeto, com o ambiente virtual ativo:
+
+```bash
+ansible lab -m ping
+ansible-playbook ansible/site.yml --syntax-check
+vagrant provision
+```
+
+`vagrant provision` reaplica os playbooks. Para verificar idempotência, avalie o resumo de cada VM: tarefas estáveis devem apresentar `changed=0`, sem falhas. Esse resultado foi confirmado nas quatro VMs desta versão.
+
+Confira os serviços e o compartilhamento:
+
+```bash
+vagrant ssh arq -c 'sudo pvs; sudo vgs; sudo lvs; findmnt /dados; sudo exportfs -v'
+vagrant ssh db -c 'sudo mariadb -Nse "SELECT 1"; cat /var/nfs/pedro.txt'
+vagrant ssh app -c 'systemctl is-active apache2; ls -l /var/nfs'
+vagrant ssh cli -c 'cat /var/nfs/henryque.txt; dpkg-query -W firefox-esr xauth'
+curl http://app.pedro.henryque.devops
+```
+
+Abra a página no navegador do Ubuntu. Para o Firefox remoto, use uma sessão gráfica com `DISPLAY` definido:
+
+```bash
+ssh -X -i .vagrant/asa/keys/henryque \
+  -o "UserKnownHostsFile=$PWD/.vagrant/asa/known_hosts" \
   henryque@cli.pedro.henryque.devops firefox-esr http://app.pedro.henryque.devops
 ```
 
-O Firefox funcionou no Ubuntu com Wayland, `DISPLAY=:0` e 2 GB em cli. O encaminhamento X11 ainda pode ter latência.
-
-### Recuperar uma instalação parcial
-
-Corrija a causa indicada e repita `bash scripts/instalar.sh --aprovar`. O script reaproveita as VMs identificadas e os playbooks são idempotentes. Ele não destrói VMs, não sobrescreve um manifesto diferente e não substitui chaves de host divergentes.
-
-- **Nome, MAC ou porta em uso:** não apague VMs de terceiros. Resolva o conflito antes de repetir.
-- **Estado de outro clone:** volte à pasta original ou escolha outro diretório de estado; os nomes de VMs existentes ainda precisam estar livres.
-- **Chave SSH:** o controlador testa as identidades do `vagrant ssh-config`; não habilita autenticação insegura nem algoritmos legados para forçar uma conexão.
-- **Rede ou DHCP divergente:** confira `VBoxManage list hostonlyifs` e `VBoxManage list dhcpservers`. Ajustes em redes compartilhadas exigem revisão manual.
-- **DNS:** confira `resolvectl status vboxnet0`. A configuração do professor não deve ser substituída para contornar erros.
-- **Disco/manifesto inesperado:** pare e confira os UUIDs/seriais. Não remova a proteção nem use formatação forçada.
-- **Pacotes, box ou NTP indisponíveis:** confira internet, repositórios e regras da rede da faculdade. A primeira instalação pode demorar por causa dos downloads.
-
-### Alternativa Windows com WSL
-
-Use o mesmo Vagrantfile; ele seleciona o nome padrão do adaptador Windows. O instalador Linux não deve ser executado no WSL.
-
-No Windows, use `scripts\projeto.cmd up-arq --aprovar-vm --aprovar-dhcp`, obtenha o `IdentityFile` com `vagrant ssh-config arq` e a chave pública com `vagrant ssh arq -c "cat /etc/ssh/ssh_host_ed25519_key.pub"`.
-
-No WSL, ative o Ansible, defina `ANSIBLE_CONFIG` e instale `ansible/requirements.yml`. Prepare o controlador com `preparar-controlador.py --vagrant-key CAMINHO_LINUX_DA_CHAVE --host-key 'ssh-ed25519 CHAVE_PUBLICA'` (converta caminhos com `wslpath`). Execute:
+Crie a pasta `referencias`, obtenha o verificador original com o professor e salve em `referencias/verifica-proj1.py`; ele não é distribuído no GitHub:
 
 ```bash
-ansible-playbook ansible/site.yml --tags base,dhcp,dns
-python3 scripts/manifesto-discos.py --vboxmanage '/mnt/c/Program Files/Oracle/VirtualBox/VBoxManage.exe'
-ansible-playbook ansible/site.yml --tags storage,nfs
+mkdir -p referencias
 ```
 
-Crie db, app e cli pelo `projeto.cmd`, uma por vez. Obtenha IP e chave pública por `vagrant ssh NOME`. Salve um JSON local como `{"name":"db","ip":"192.168.56.121","hostkey":"ssh-ed25519 CHAVE_PUBLICA"}`, registre com `python3 scripts/registrar-cliente.py CAMINHO_JSON` e aplique `ansible-playbook ansible/client-site.yml` após registrar os três clientes.
-
-O Windows usa NRPT para `.pedro.henryque.devops`, servidor `192.168.56.120`, comentário `ASA-Proj1`. Confira regras existentes antes de criar a regra específica com `Add-DnsClientNrptRule`; não troque os DNS gerais. Para removê-la, confira namespace, servidor e comentário e use `Remove-DnsClientNrptRule -Name IDENTIFICADOR` somente nessa regra.
-
-## 7. Resultados e verificador oficial
-
-**Implantação manual comprovada:** em 18/11/2026 o aluno implantou as quatro VMs a partir de um clone limpo no laboratório. Foram demonstrados DHCP/reservas, DDNS, DNS direto/reverso e do hospedeiro, SSH/sudo, Chrony, LVM, NFS/autofs, MariaDB, Apache/HTTP 200 e Firefox remoto. Desligar e iniciar novamente confirmou a persistência.
-
-| VM | ok | changed | unreachable | failed |
-|---|---:|---:|---:|---:|
-| arq | 60 | 0 | 0 | 0 |
-| db | 25 | 0 | 0 | 0 |
-| app | 26 | 0 | 0 | 0 |
-| cli | 24 | 0 | 0 | 0 |
-
-Esses resultados foram informados pelo aluno e ocorreram **antes de comentar `upgrade: dist`**. Não foi necessário alterar os playbooks para compatibilidade com Linux nativo.
-
-**Instalador automatizado:** ainda não foi validado integralmente com VMs reais. Verificações estáticas e simulações não comprovam uma implantação real nem a compatibilidade com toda máquina Ubuntu.
-
-O verificador original retornou **0**, sem erros reportados na implantação manual. Obtenha-o com o professor/Classroom e coloque-o em `referencias/verifica-proj1.py` (crie a pasta se necessário). Ele não é distribuído por falta de autorização de redistribuição.
-
-Com as variáveis do Ansible acima definidas e o display gráfico funcionando:
+Depois de salvar o original, execute:
 
 ```bash
 python3 scripts/verificador-oficial.py
 ```
 
-O auxiliar exige ausência de conta/home `intruso` e chave temporária. Os arquivos `pedro.txt` e `henryque.txt` precisam existir no NFS; o instalador os prepara sem substituir conteúdo existente. O auxiliar mantém o original intacto, faz backup dos arquivos e realiza a limpeza posterior. Logs e estado local não devem ser publicados.
+O auxiliar executa o original com `pedro.henryque`, usando DNS normal. Antes, exige ausência de `intruso` e faz backup de `pedro.txt` e `henryque.txt`; depois limpa o usuário temporário e restaura os arquivos NFS. Chaves, backup e logs não são publicados. Não execute diretamente o original sobre dados importantes sem essa proteção.
 
-Retorno 0 não representa nota automática: o original oculta alguns erros e abre Firefox em segundo plano. Preserve a confirmação visual e os demais resultados demonstrados.
+## 7. Entender os arquivos
+
+| Arquivo | O que explicar |
+|---|---|
+| `Vagrantfile` | Recursos, NAT/rede privada, ordem, gatilho DHCP e provisionamento; funções de proteção conferem VMs, chaves e discos. |
+| `ansible.cfg` e `ansible/inventory.ini` | Configuração e referência dos hosts; o inventário NAT de execução é gerado em `.vagrant/asa/inventory.ini`. |
+| `ansible/site.yml` | Importa os quatro playbooks na ordem; o Vagrant limita cada execução à VM atual. |
+| `ansible/base.yml` | APT, Chrony, timezone, usuários, chaves, sudo e SSH. |
+| `ansible/dhcp-dns.yml` | Interface privada, DHCP, TSIG, zonas e validações de sintaxe. |
+| `ansible/lvm-nfs.yml` | Valida discos, cria PV/VG/LV sem forçar, monta ext4 e exporta NFS. |
+| `ansible/clientes.yml` | autofs, MariaDB, Apache, Firefox e arquivos de demonstração. |
+| `ansible/group_vars/all.yml` | Domínio, usuários, IPs, MACs e parâmetros compartilhados. |
+| `ansible/templates/` e `ansible/files/` | Configurações dos serviços, página HTML e validador dos discos. |
+| `scripts/bootstrap-client.sh` | Ativa DHCP privado pelo MAC, preservando a rota padrão NAT. |
+| `scripts/verificador-oficial.py`, `pre-verificador.yml` e `pos-verificador.yml` | Protegem os dados e executam o verificador sem modificá-lo. |
+
+`hosts` escolhe os alvos; `become` usa sudo; `tasks` lista as tarefas; `loop` repete uma tarefa; `when` escolhe a VM; `notify` chama um handler somente quando há mudança. `template` preenche variáveis; `copy` instala arquivos; `apt` instala pacotes; `service` habilita/inicia serviços. Não há dependência de roles.
+
+## 8. Resultados e limites desta versão
+
+A implantação **manual anterior** foi validada pelo aluno no laboratório em 18/11/2026: serviços, verificador, idempotência e persistência após reinicialização. Isso ocorreu antes de comentar `upgrade: dist`. Esses resultados não comprovam o novo fluxo de `vagrant up`.
+
+Em 26/11/2026, esta branch foi testada com VirtualBox aninhado em Ubuntu Server 24.04.5, dentro do Hyper-V, com 6 GiB e 4 CPUs. `vagrant up` criou as quatro VMs com os recursos da tabela. A instalação exigiu um ajuste na criação dos arquivos de demonstração NFS em app; após `vagrant provision app`, outro `vagrant up` concluiu cli. Portanto, foi uma implantação real com correção e retomada, não uma execução limpa do início ao fim da versão final corrigida.
+
+Passaram os testes de DHCP (reservas de db/app e cli em `192.168.56.50`), DDNS, DNS direto/reverso pelo resolvedor normal, LVM/ext4, NFS/autofs, escrita e leitura pelos usuários com mapeamento UID/GID 2048, Chrony, SSH/sudo, MariaDB e HTTP. A internet continuou pela NAT. `ansible lab -m ping` respondeu nas quatro VMs; `vagrant provision` terminou com `changed=0`, `unreachable=0` e `failed=0` em todas.
+
+O verificador original, sem alterações, terminou com código 0 e sem mensagens de falha. Depois, foi confirmada a ausência de `intruso` e a preservação dos arquivos NFS por comparação com os backups. O código de saída do script não representa uma nota. O aluno confirmou visualmente que o Firefox remoto abriu por X11/WSLg e carregou a página do Apache. Após simplificar o HTML, foram confirmados HTTP 200 e o conteúdo servido idêntico ao arquivo de origem.
+
+Também passaram `vagrant validate`, a sintaxe dos sete playbooks, a renderização dos seis templates e 17 simulações isoladas. As VMs não foram reiniciadas neste teste; a persistência após reinicialização desta refatoração ainda não foi comprovada. O teste com WSLg deixou pouca RAM livre no Windows: prefira um Ubuntu físico com memória disponível para a apresentação.
+
+Para testar no Ubuntu do Hyper-V, confira primeiro memória/disco, SSH, `/dev/kvm`, flags `vmx`/`svm`, `/dev/vboxdrv` e suporte à virtualização aninhada. A presença das flags, sozinha, não prova que o VirtualBox executa convidados. A exposição dessas extensões e a criação de convidados de teste dependem de autorização. Se o Hyper-V não permitir o teste, use um Ubuntu físico isolado.

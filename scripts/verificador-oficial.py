@@ -2,12 +2,13 @@
 """Confere os pré-requisitos e executa o verificador original sem modificá-lo."""
 import os, pathlib, socket, subprocess, tempfile, shutil, sys, json
 root=pathlib.Path(__file__).resolve().parent.parent
-state=pathlib.Path(os.environ.get('ASA_PROJ1_STATE_DIR',pathlib.Path.home()/'.local/share/asa-proj1'))
+state=root/'.vagrant/asa'
+os.environ['ANSIBLE_CONFIG']=str(root/'ansible.cfg')
 hosts=['arq','app','db','cli']; suffix='.pedro.henryque.devops'
-inventory=json.loads(subprocess.check_output(['ansible-inventory','-i',str(root/'ansible/inventory.ini'),'--list'],text=True))['_meta']['hostvars']
+inventory=json.loads(subprocess.check_output(['ansible-inventory','-i',str(state/'inventory.ini'),'--list'],text=True))['_meta']['hostvars']
 for h in hosts:
     ip=socket.gethostbyname(h+suffix)
-    if ip != inventory[h]['ansible_host']: raise SystemExit('DNS diverge do inventario aprovado: '+h)
+    if ip != json.loads((state/(h+'.json')).read_text())['ip']: raise SystemExit('DNS diverge do inventario aprovado: '+h)
 for user in ['pedro','henryque']:
     if not (state/'keys'/user).is_file(): raise SystemExit('Chave ausente: '+user)
 if not os.environ.get('DISPLAY'): raise SystemExit('DISPLAY ausente; use uma sessão gráfica com X11 e xauth')
