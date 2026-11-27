@@ -122,6 +122,8 @@ curl http://app.pedro.henryque.devops
 
 Abra a página no navegador do Ubuntu. Para o Firefox remoto, use uma sessão gráfica com `DISPLAY` definido:
 
+No Ubuntu Server sem desktop, conecte-se a partir de um computador com servidor X, como o WSLg, usando SSH com `-X` ou `-Y`. Mantenha essa sessão aberta durante a demonstração; uma conexão SSH comum não encaminha a janela.
+
 ```bash
 ssh -X -i .vagrant/asa/keys/henryque \
   -o "UserKnownHostsFile=$PWD/.vagrant/asa/known_hosts" \
@@ -134,13 +136,42 @@ Crie a pasta `referencias`, obtenha o verificador original com o professor e sal
 mkdir -p referencias
 ```
 
-Depois de salvar o original, execute:
+O original usa os usuários do argumento `pedro.henryque` e procura as chaves em `keys/` a partir da pasta atual. Use DNS normal e uma sessão gráfica com `DISPLAY` definido. Cadastre as chaves de host obtidas pelo Vagrant, sem apagar os registros SSH existentes:
 
 ```bash
-python3 scripts/verificador-oficial.py
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+cat .vagrant/asa/known_hosts >> ~/.ssh/known_hosts
+chmod 600 ~/.ssh/known_hosts
 ```
 
-O auxiliar executa o original com `pedro.henryque`, usando DNS normal. Antes, exige ausência de `intruso` e faz backup de `pedro.txt` e `henryque.txt`; depois limpa o usuário temporário e restaura os arquivos NFS. Chaves, backup e logs não são publicados. Não execute diretamente o original sobre dados importantes sem essa proteção.
+O verificador sobrescreve `pedro.txt` e `henryque.txt` no NFS e tenta criar/remover o usuário `intruso`. Antes, confirme que essa conta, `/home/intruso` e `/tmp/intruso.pub` não existem nas VMs. Preserve os dois arquivos em arq:
+
+```bash
+backup="/root/asa-verificador-$(date +%Y%m%d-%H%M%S)"
+vagrant ssh arq -c "sudo mkdir -m 700 '$backup' && sudo cp -a /dados/nfs/pedro.txt /dados/nfs/henryque.txt '$backup/'"
+```
+
+Execute o original sem modificá-lo. O agente SSH fica fora desse teste para não autenticar os acessos que o script espera bloquear:
+
+```bash
+cd .vagrant/asa
+env -u SSH_AUTH_SOCK python3 ../../referencias/verifica-proj1.py pedro.henryque
+cd ../..
+```
+
+Depois, restaure os dados e confira a limpeza. Remova `intruso` somente se ele foi criado pelo teste e não existia antes:
+
+```bash
+vagrant ssh arq -c "sudo cp -a '$backup/pedro.txt' '$backup/henryque.txt' /dados/nfs/"
+for vm in arq app db cli; do
+    vagrant ssh "$vm" -c 'if getent passwd intruso >/dev/null; then sudo userdel -r intruso; fi; sudo rm -f /tmp/intruso.pub'
+done
+```
+
+Faça a restauração e a conferência mesmo se o teste for interrompido. O código de saída do original não representa uma nota: leia a saída de cada host. Chaves, backups e logs ficam fora do Git.
+
+O original abre o Firefox em segundo plano e oculta seus erros. Se a janela não aparecer, use o comando de Firefox acima para ver a mensagem de erro.
 
 ## 7. Entender os arquivos
 
@@ -156,7 +187,6 @@ O auxiliar executa o original com `pedro.henryque`, usando DNS normal. Antes, ex
 | `ansible/group_vars/all.yml` | Domínio, usuários, IPs, MACs e parâmetros compartilhados. |
 | `ansible/templates/` e `ansible/files/` | Configurações dos serviços, página HTML e validador dos discos. |
 | `scripts/bootstrap-client.sh` | Ativa DHCP privado pelo MAC, preservando a rota padrão NAT. |
-| `scripts/verificador-oficial.py`, `pre-verificador.yml` e `pos-verificador.yml` | Protegem os dados e executam o verificador sem modificá-lo. |
 
 `hosts` escolhe os alvos; `become` usa sudo; `tasks` lista as tarefas; `loop` repete uma tarefa; `when` escolhe a VM; `notify` chama um handler somente quando há mudança. `template` preenche variáveis; `copy` instala arquivos; `apt` instala pacotes; `service` habilita/inicia serviços. Não há dependência de roles.
 
@@ -170,6 +200,8 @@ Passaram os testes de DHCP (reservas de db/app e cli em `192.168.56.50`), DDNS, 
 
 O verificador original, sem alterações, terminou com código 0 e sem mensagens de falha. Depois, foi confirmada a ausência de `intruso` e a preservação dos arquivos NFS por comparação com os backups. O código de saída do script não representa uma nota. O aluno confirmou visualmente que o Firefox remoto abriu por X11/WSLg e carregou a página do Apache. Após simplificar o HTML, foram confirmados HTTP 200 e o conteúdo servido idêntico ao arquivo de origem.
 
-Também passaram `vagrant validate`, a sintaxe dos sete playbooks, a renderização dos seis templates e 17 simulações isoladas. As VMs não foram reiniciadas neste teste; a persistência após reinicialização desta refatoração ainda não foi comprovada. O teste com WSLg deixou pouca RAM livre no Windows: prefira um Ubuntu físico com memória disponível para a apresentação.
+O original também foi executado diretamente, sem auxiliares, com código 0 e sem mensagens de falha. Os dados e as permissões NFS foram conferidos após a restauração, e `intruso` estava ausente nas quatro VMs.
+
+Também passaram `vagrant validate`, a sintaxe dos cinco playbooks que permanecem no projeto, a renderização dos seis templates e 17 simulações isoladas. As VMs não foram reiniciadas neste teste; a persistência após reinicialização desta refatoração ainda não foi comprovada. O teste com WSLg deixou pouca RAM livre no Windows: prefira um Ubuntu físico com memória disponível para a apresentação.
 
 Para testar no Ubuntu do Hyper-V, confira primeiro memória/disco, SSH, `/dev/kvm`, flags `vmx`/`svm`, `/dev/vboxdrv` e suporte à virtualização aninhada. A presença das flags, sozinha, não prova que o VirtualBox executa convidados. A exposição dessas extensões e a criação de convidados de teste dependem de autorização. Se o Hyper-V não permitir o teste, use um Ubuntu físico isolado.

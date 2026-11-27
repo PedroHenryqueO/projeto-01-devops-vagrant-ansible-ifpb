@@ -1,5 +1,5 @@
 # -*- mode: ruby -*-
-# Cria arq primeiro e provisiona cada VM antes de iniciar a seguinte.
+# Cria as quatro VMs e configura arq antes dos clientes.
 require "open3"
 require "json"
 require "fileutils"
@@ -7,7 +7,7 @@ require "shellwords"
 require "socket"
 require "ipaddr"
 
-# Protecoes do hospedeiro e arquivos locais usados pelo Ansible.
+# Confere o ambiente e prepara os arquivos locais do Ansible.
 module Projeto
   ROOT = File.expand_path(__dir__)
   STATE = File.join(ROOT, ".vagrant", "asa")
@@ -50,7 +50,7 @@ module Projeto
       next if owned.key?(uuid)
       vm = info(vbox, uuid)
       raise "Nome reservado sem vinculo com este clone: #{name}" if specs.keys.any? { |n| name == "ASA-Proj1-#{n}" }
-      # Nao interrompe o DHCP de uma rede cadastrada em VMs de terceiros.
+      # Preserva redes usadas por outras VMs.
       raise "Rede #{adapter} pertence tambem a #{name}; escolha uma rede isolada" if vm.any? { |k, v| k.start_with?("hostonlyadapter") && v == adapter }
       raise "MAC reservado ja usado por #{name}" if vm.any? { |k, v| k.start_with?("macaddress") && specs.values.any? { |s| s[:mac].downcase == v.downcase } }
     end
@@ -130,7 +130,7 @@ module Projeto
     File.write(path, JSON.pretty_generate(record), perm: 0600)
     records = %w[arq db app cli].map { |n| File.join(STATE, "#{n}.json") }.select { |p| File.file?(p) }.map { |p| JSON.parse(File.read(p)) }
     File.write(File.join(STATE, "known_hosts"), records.map { |r| "[127.0.0.1]:#{r['port']},#{r['ip']},#{r['name']}.#{DOMAIN} #{r['hostkey']}\n" }.join, perm: 0600)
-    # Testa cada IdentityFile: algumas versoes da box autenticam apenas com RSA.
+    # Testa as chaves da box e guarda somente a que autentica.
     target = File.join(STATE, "keys", "vagrant-#{name}")
     candidate = target + ".candidate"
     accepted = Array(ssh[:private_key_path]).any? do |key|
@@ -202,7 +202,7 @@ Vagrant.configure("2") do |config|
     end
   end
 
-  # Padrao da Pratica 05: para o processo DHCP antes de aguardar o SSH.
+  # Para o DHCP do VirtualBox para evitar conflito.
   config.trigger.before :"Vagrant::Action::Builtin::WaitForCommunicator", type: :action do |t|
     t.warn = "Interrompe o servidor DHCP do VirtualBox"
     t.run = { inline: "#{Shellwords.escape(vbox)} dhcpserver stop --interface #{Shellwords.escape(hostonly)}" }
@@ -227,7 +227,7 @@ Vagrant.configure("2") do |config|
         vb.linked_clone = true
         vb.check_guest_additions = false
       end
-      # O primeiro hook registra o SSH apos o bootstrap, antes do Ansible.
+      # Registra as chaves e os endereços antes de executar o Ansible.
       vm.trigger.after :provisioner_run, type: :hook do |t|
         t.ruby { |_env, machine| Projeto.register(machine, vbox) }
       end

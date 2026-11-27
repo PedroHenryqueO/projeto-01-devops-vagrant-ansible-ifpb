@@ -81,8 +81,7 @@
         group: bind
         mode: '0755'
 
-    # Cria as zonas apenas uma vez para preservar as atualizações do DDNS.
-    # Altere registros estáticos sem sobrescrever as zonas já existentes.
+    # Preserva as zonas existentes e suas atualizações DDNS.
     - name: Inicializar zonas sem sobrescrever dados dinamicos existentes
       ansible.builtin.template:
         src: "{{ item.template }}"
@@ -119,6 +118,7 @@
         - { file: db.reverse, zone: "{{ reverse_zone }}" }
       changed_when: false
 
+    # Atende DHCP somente na interface privada.
     - name: Restringir DHCP a interface privada descoberta
       ansible.builtin.copy:
         dest: /etc/default/isc-dhcp-server

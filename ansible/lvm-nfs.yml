@@ -3,7 +3,7 @@
   hosts: fileservers
   become: true
   tasks:
-    # Confere os discos antes de criar o LVM e montar o compartilhamento NFS.
+    # Valida os discos antes de criar o LVM; preserva o disco do sistema.
     - name: Instalar ferramentas sem iniciar NFS antecipadamente
       ansible.builtin.apt:
         name: [lvm2, e2fsprogs, nfs-kernel-server]
@@ -35,6 +35,7 @@
         state: present
         remove_extra_pvs: false
 
+    # Cria o volume lógico de 15 GiB sem reduzir volumes existentes.
     - name: Criar LV de 15 GiB sem redimensionamento destrutivo
       community.general.lvol:
         vg: dados
@@ -133,6 +134,7 @@
         group: root
         mode: '0755'
 
+    # Compartilha os arquivos pela rede com mapeamento para nfs-ifpb.
     - name: Configurar exportacao sem alterar exports alheios
       ansible.builtin.copy:
         dest: /etc/exports.d/asa-proj1.exports

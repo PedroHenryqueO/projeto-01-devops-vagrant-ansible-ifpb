@@ -68,6 +68,7 @@
         enabled: true
         state: started
       when: inventory_hostname == 'app'
+    # Instala o Firefox e as ferramentas X11 no cliente.
     - name: Instalar ferramentas graficas
       ansible.builtin.apt:
         name: [firefox-esr, xauth, x11-utils]

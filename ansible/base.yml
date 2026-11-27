@@ -7,7 +7,7 @@
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 3600
-        # Atualização completa desativada por orientação do professor.
+        # Atualiza os índices sem fazer upgrade completo.
         # upgrade: dist
         lock_timeout: 180
 
@@ -53,6 +53,7 @@
         groups: vagrant
         append: true
 
+    # Cria os usuários e adiciona ao grupo ifpb.
     - name: Criar usuarios academicos
       ansible.builtin.user:
         name: "{{ item }}"
@@ -78,8 +79,7 @@
         mode: '0440'
         validate: /usr/sbin/visudo -cf %s
 
-    # Testa as chaves em novas conexões antes e depois de restringir o SSH.
-    # Confirma as chaves e o sudo sem reutilizar uma conexão SSH existente.
+    # Testa as chaves e o sudo antes de restringir o SSH.
     - name: Verificar chave e elevacao em nova conexao SSH
       ansible.builtin.command:
         argv:
@@ -137,7 +137,7 @@
     - name: Aplicar configuracoes validadas
       ansible.builtin.meta: flush_handlers
 
-    # Confirma as chaves e o sudo sem reutilizar uma conexão SSH existente.
+    # Confirma o acesso em uma nova conexão após restringir o SSH.
     - name: Confirmar acesso apos configurar SSH
       ansible.builtin.command:
         argv:
